@@ -1,27 +1,28 @@
 services:
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:16-alpine
     restart: always
     env_file:
       - .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       TZ: Asia/Seoul
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - auth-network
+      - agolive-network
 
   redis:
-    image: redis:8.0-alpine
+    image: redis:7-alpine
     restart: always
     env_file:
       - .env
@@ -29,9 +30,14 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: sh -c "redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - auth-network
+      - agolive-network
 
   prometheus:
     image: prom/prometheus:v3.2.1
@@ -46,7 +52,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - auth-network
+      - agolive-network
 
   grafana:
     image: grafana/grafana:11.5.2
@@ -67,14 +73,14 @@ services:
     depends_on:
       - prometheus
     networks:
-      - auth-network
+      - agolive-network
 
 networks:
-  auth-network:
+  agolive-network:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
   redis_data:
   prometheus_data:
   grafana_data:

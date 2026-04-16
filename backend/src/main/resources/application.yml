@@ -5,10 +5,10 @@ spring:
   application:
     name: ${SPRING_APPLICATION_NAME:backend}
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/${MYSQL_DATABASE:app}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true}
-    username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:root_pass}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/${POSTGRES_DB:agolive}}
+    username: ${POSTGRES_USER:agolive}
+    password: ${POSTGRES_PASSWORD:agolive_pass}
+    driver-class-name: org.postgresql.Driver
     # Hikari 기본 튜닝 포인트. 운영 부하와 DB 커넥션 한도에 맞춰 오버라이드할 것.
     # 공식 가이드: (core_count * 2) + effective_spindle_count 를 출발점으로 삼는다.
     hikari:
@@ -27,7 +27,7 @@ spring:
       ddl-auto: none
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: false
   flyway:

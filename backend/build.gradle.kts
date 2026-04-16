@@ -58,9 +58,8 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
 
     // Database
-    runtimeOnly("com.mysql:mysql-connector-j")
+    runtimeOnly("org.postgresql:postgresql")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
-    implementation("org.flywaydb:flyway-mysql")
 
     // API Docs (Boot 4.x 대응 버전)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
@@ -85,7 +84,7 @@ dependencies {
     // springmockk: Spring 컨텍스트 내에서 @MockkBean 사용 가능하게 해주는 브릿지
     testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
-    testImplementation("org.testcontainers:testcontainers-mysql")
+    testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:testcontainers") // GenericContainer (Redis 등)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 

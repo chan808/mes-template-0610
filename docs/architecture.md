@@ -1,0 +1,187 @@
+# Architecture
+
+## Services
+
+| Service | Lang | Port | Role |
+|---|---|---|---|
+| agolive-api | Kotlin/Spring | 8080 | 인증, CRUD, 내부 토큰 검증 |
+| agolive-realtime | Go | 8081 | WebSocket, 위치 동기화, 브로드캐스트 |
+
+내부 통신: `POST /internal/auth/verify` (Go → Spring, 외부 차단)
+
+---
+
+## Schema
+
+### PostgreSQL
+
+```sql
+avatar_templates (id, name, image_url, is_active)
+
+users (id, email, password_hash[nullable], nickname, avatar_id→avatar_templates,
+       provider[nullable], provider_id[nullable], created_at, updated_at)
+
+rooms (id, invite_token[uuid, unique], invite_token_expires_at[nullable],
+       name, owner_id→users, is_private, max_capacity[default 10],
+       status[active|closed], deleted_at[nullable], created_at, updated_at)
+
+messages (id, room_id→rooms, user_id→users[nullable=system], content,
+          type[chat|system], created_at)
+
+-- indexes
+CREATE INDEX idx_messages_room_id_id ON messages(room_id, id DESC);
+CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
+```
+
+### Redis
+
+| Key | Type | TTL | 용도 |
+|---|---|---|---|
+| `presence:{roomId}:{userId}` | String (JSON) | 30s | 위치 {x,y,nickname,avatarId} |
+| `room:members:{roomId}` | Set | - | 현재 접속자 |
+| `blacklist:token:{jti}` | String | 잔여 만료 | 로그아웃 토큰 |
+| `refresh:{userId}` | String | 7d | Refresh Token |
+
+---
+
+## Module Structure (Spring Modulith)
+
+| Module   | 책임 |
+|----------|------|
+| auth     | 인증/인가, JWT 발급·검증, OAuth2, 토큰 블랙리스트 |
+| user     | 사용자 프로필 조회·수정, 아바타 목록 |
+| room     | 방 생성·수정·삭제, 초대 토큰 관리 |
+| message  | 채팅 기록 저장·페이지 조회 |
+| internal | Go 서버 전용 내부 API (/internal/**) |
+
+---
+
+## API
+
+### agolive-api
+
+```
+POST   /api/v1/auth/signup
+POST   /api/v1/auth/login
+POST   /api/v1/auth/logout
+POST   /api/v1/auth/refresh
+GET    /api/v1/auth/oauth2/{provider}
+
+GET    /api/v1/users/me
+PATCH  /api/v1/users/me
+GET    /api/v1/avatars
+
+POST   /api/v1/rooms
+GET    /api/v1/rooms
+GET    /api/v1/rooms/{id}
+PATCH  /api/v1/rooms/{id}
+DELETE /api/v1/rooms/{id}
+POST   /api/v1/rooms/{id}/invite        -- 초대 토큰 재생성
+GET    /api/v1/rooms/join/{token}       -- 초대 링크로 방 정보 조회
+
+GET    /api/v1/rooms/{id}/messages?before={id}&limit=50
+
+POST   /internal/auth/verify            -- Go 전용, Nginx 외부 차단
+```
+
+### agolive-realtime
+
+```
+WS /ws/rooms/{roomId}?token={jwt}
+```
+
+---
+
+## WebSocket Events
+
+```
+client → server
+  move    {x, y}
+  chat    {content}
+  ping    {}
+
+server → client
+  presence  {userId, x, y, nickname, avatarId}
+  chat      {messageId, userId, content, createdAt}
+  join      {userId, nickname}
+  leave     {userId}
+  pong      {}
+  error     {code, message}
+```
+
+---
+
+## Auth Flow
+
+1. 로그인 → Spring 발급: Access(15m) + Refresh(7d, Redis 저장)
+2. WS 연결 → Go: JWT 로컬 검증 → Redis blacklist 확인 → `/internal/auth/verify`
+3. 로그아웃 → Spring: Redis `blacklist:token:{jti}` 기록
+
+JWT claims: `sub(userId), nickname, avatarId, jti, iat, exp`
+
+---
+
+## Business Rules
+
+- 정원 초과 시 신규 입장 거부 (기존 접속자 유지)
+- 최대 인원 수정 시 현재 접속자 수 미만으로 설정 불가
+- 초대 토큰 재생성 시 기존 토큰 즉시 무효화 (경고 필요)
+- 방 삭제: 소프트 삭제 → 30일 후 배치 물리 삭제 (`@Scheduled`)
+- presence 30s TTL: 클라이언트 20s마다 ping으로 갱신
+
+---
+
+## Error Response
+
+```json
+{ "code": "ROOM_FULL", "message": "정원이 초과되었습니다." }
+```
+
+| code | HTTP | 설명 |
+|------|------|------|
+| UNAUTHORIZED | 401 | 인증 실패 또는 토큰 만료 |
+| FORBIDDEN | 403 | 권한 없음 |
+| ROOM_FULL | 409 | 정원 초과 |
+| ROOM_NOT_FOUND | 404 | 존재하지 않는 방 |
+| INVALID_INVITE_TOKEN | 400 | 유효하지 않은 초대 토큰 |
+| DUPLICATE_EMAIL | 409 | 이미 가입된 이메일 |
+
+---
+
+## Infra
+
+### Docker Compose (1차)
+- postgres:16-alpine / redis:7-alpine
+- Nginx: `/api/**` → 8080, `/ws/**` → 8081 (WebSocket upgrade), `/internal/**` deny
+
+### EKS (2차 전환 시 추가 예정)
+
+---
+
+## Decision Log
+
+| 결정 | 선택 | 이유 |
+|---|---|---|
+| 실시간 서버 | Go | goroutine 동시성, JVM 대비 메모리 효율 |
+| AI 에이전트 서버 | 2차에 별도 서비스로 추가 예정 | 에이전트 상태관리/오케스트레이션은 Spring/Go와 역할이 달라 분리 |
+| WS 라이브러리 | coder/websocket | context 지원, 활발한 유지보수 |
+| 내부 통신 | REST → gRPC (2차) | 초기 개발 속도 우선 |
+| 메시지 브로커 | Redis Pub/Sub → Kafka (2차) | 1차 규모에 충분 |
+| 위치 저장 | Redis only | 고빈도 쓰기, 영속성 불필요 |
+| 초대 방식 | UUID 토큰 | 예측 불가, 재생성 가능 |
+| 방 삭제 | 소프트 삭제 | 채팅 기록 보존 |
+
+---
+
+## Agent Architecture (Phase 2+)
+
+2차부터 추가될 에이전트 서버 구조 (설계 예정)
+
+agolive-agent (Python/FastAPI 예정)
+- 단일/멀티 에이전트 실행 및 상태 관리
+- Claude API tool use 기반 도구 실행
+- Human-in-the-loop 인터럽트 처리
+- 에이전트 응답 스트리밍 → Go 실시간 서버 경유 → 클라이언트
+
+에이전트 상태: idle / running / paused / done
+파일 생성 결과물은 S3 저장 후 다운로드 URL 제공

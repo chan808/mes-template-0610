@@ -1,3 +1,2 @@
 ALTER TABLE members
-    ADD COLUMN token_version BIGINT NOT NULL DEFAULT 0
-    AFTER role;
+    ADD COLUMN token_version BIGINT NOT NULL DEFAULT 0;
