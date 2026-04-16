@@ -1,0 +1,12 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      public:
+        info: false
+        prometheus: false
+  endpoint:
+    health:
+      show-details: never
+      show-components: never

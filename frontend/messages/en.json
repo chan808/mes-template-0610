@@ -1,0 +1,115 @@
+{
+  "auth": {
+    "login": {
+      "title": "Sign In",
+      "emailLabel": "Email",
+      "emailPlaceholder": "email@example.com",
+      "passwordLabel": "Password",
+      "submitButton": "Sign In",
+      "signupLink": "Don't have an account? Sign Up",
+      "forgotPasswordLink": "Forgot your password?",
+      "errorMessage": "Invalid email or password.",
+      "resetSuccessMessage": "Password changed. Please sign in with your new password.",
+      "resend": {
+        "description": "If you haven't verified {email} yet, you can send a new verification email.",
+        "action": "Resend verification email",
+        "cooldown": "Resend available in {seconds}s",
+        "success": "A new verification email has been sent. Please check your inbox.",
+        "error": "Failed to resend the verification email."
+      }
+    },
+    "forgotPassword": {
+      "title": "Reset Password",
+      "description": "Enter your email address and we'll send you a reset link.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "email@example.com",
+      "submitButton": "Send Reset Link",
+      "errorMessage": "Request failed. Please try again later.",
+      "sentTitle": "Check your email",
+      "sentDescription": "We sent a reset link to your inbox. (valid for 30 minutes)"
+    },
+    "signup": {
+      "title": "Sign Up",
+      "emailLabel": "Email",
+      "emailPlaceholder": "email@example.com",
+      "passwordLabel": "Password",
+      "passwordHint": "At least 8 characters.",
+      "submitButton": "Sign Up",
+      "loginLink": "Already have an account? Sign In",
+      "successMessage": "Account created. Please sign in.",
+      "verifyTitle": "Check your email",
+      "verifyDescription": "We sent a verification link to {email}. Please check your inbox and click the link.",
+      "resend": {
+        "action": "Resend verification email",
+        "cooldown": "Resend available in {seconds}s",
+        "success": "A new verification email has been sent. Please check your inbox.",
+        "error": "Failed to resend the verification email."
+      }
+    },
+    "resetPassword": {
+      "title": "Reset Password",
+      "newPasswordLabel": "New Password",
+      "confirmPasswordLabel": "Confirm Password",
+      "submitButton": "Change Password",
+      "errorMessage": "Failed to reset password.",
+      "invalidTitle": "Invalid Link",
+      "invalidDescription": "The password reset link has expired or is invalid."
+    },
+    "social": {
+      "divider": "or",
+      "loginWith": "Continue with {provider}"
+    },
+    "verifyEmail": {
+      "idle": {
+        "title": "Confirm Email Verification",
+        "description": "Open the verification page and confirm the action to complete email verification.",
+        "action": "Verify Email"
+      },
+      "loading": {
+        "title": "Verifying...",
+        "description": "Please wait a moment."
+      },
+      "success": {
+        "title": "Email Verified",
+        "description": "Your email has been successfully verified.",
+        "action": "Go to Sign In"
+      },
+      "error": {
+        "title": "Verification Failed",
+        "description": "The verification link is invalid or has expired."
+      }
+    }
+  },
+  "member": {
+    "profile": {
+      "title": "My Profile",
+      "emailLabel": "Email",
+      "nicknameLabel": "Nickname",
+      "nicknamePlaceholder": "Enter your nickname",
+      "providerLabel": "Sign-in method",
+      "providerLocal": "Email",
+      "editButton": "Edit Profile",
+      "saveButton": "Save",
+      "cancelButton": "Cancel",
+      "successMessage": "Profile updated successfully.",
+      "errorMessage": "Failed to update profile."
+    },
+    "changePassword": {
+      "title": "Change Password",
+      "currentPasswordLabel": "Current Password",
+      "newPasswordLabel": "New Password",
+      "confirmPasswordLabel": "Confirm New Password",
+      "submitButton": "Change",
+      "successMessage": "Password changed successfully.",
+      "errorMessage": "Failed to change password."
+    },
+    "withdraw": {
+      "button": "Delete Account",
+      "dialogTitle": "Are you sure?",
+      "dialogDescription": "Your account and all data will be permanently deleted and cannot be recovered.",
+      "confirmButton": "Delete Account",
+      "cancelButton": "Cancel",
+      "errorMessage": "Something went wrong. Please try again."
+    }
+  }
+}

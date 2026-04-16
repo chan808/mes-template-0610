@@ -1,0 +1,36 @@
+# --- IDE & Editor ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Node / Frontend (미리 세팅) ---
+**/node_modules/
+**/dist/
+**/.next/
+**/build-frontend/
+.eslintcache
+
+# --- Backend Common ---
+**/build/
+**/.gradle/
+**/.gradle-home/
+**/bin/
+
+# --- Environment & Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- ai ---
+CLAUDE.md
+AGENTS.md
+.claude/
