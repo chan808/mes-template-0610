@@ -13,7 +13,8 @@ CREATE TABLE rooms
     updated_at              TIMESTAMPTZ  NOT NULL,
     CONSTRAINT pk_rooms PRIMARY KEY (id),
     CONSTRAINT uk_rooms_invite_token UNIQUE (invite_token),
-    CONSTRAINT fk_rooms_owner FOREIGN KEY (owner_id) REFERENCES users (id)
+    CONSTRAINT fk_rooms_owner FOREIGN KEY (owner_id) REFERENCES users (id),
+    CONSTRAINT chk_rooms_status CHECK (status IN ('active', 'closed'))
 );
 
 CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);

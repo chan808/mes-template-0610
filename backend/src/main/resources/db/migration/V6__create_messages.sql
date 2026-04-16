@@ -8,7 +8,8 @@ CREATE TABLE messages
     created_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT pk_messages PRIMARY KEY (id),
     CONSTRAINT fk_messages_room FOREIGN KEY (room_id) REFERENCES rooms (id),
-    CONSTRAINT fk_messages_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+    CONSTRAINT fk_messages_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT chk_messages_type CHECK (type IN ('chat', 'system'))
 );
 
 -- 커서 기반 페이지네이션 최적화

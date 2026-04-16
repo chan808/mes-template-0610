@@ -20,7 +20,7 @@ spring:
       max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
       # leak-detection-threshold는 스테이징/개발에서만 켜는 걸 권장 (기본 0 = 비활성)
       leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:0}
-      pool-name: AuthTemplateHikariPool
+      pool-name: AgoliveHikariPool
   jpa:
     open-in-view: false
     hibernate:
