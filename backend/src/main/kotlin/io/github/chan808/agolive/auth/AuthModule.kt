@@ -1,0 +1,10 @@
+@file:Suppress("unused")
+
+package io.github.chan808.agolive.auth
+
+import org.springframework.modulith.ApplicationModule
+
+@ApplicationModule(
+    allowedDependencies = ["user :: api", "user :: events", "common", "common :: metrics", "common :: ratelimit"],
+)
+class AuthModule
