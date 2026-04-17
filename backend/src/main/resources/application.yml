@@ -171,3 +171,6 @@ springdoc:
 
 server:
   port: 8080
+
+internal:
+  secret: ${INTERNAL_SECRET}

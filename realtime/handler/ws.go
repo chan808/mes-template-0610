@@ -297,6 +297,7 @@ func (h *Handler) getRoomInfo(ctx context.Context, roomID string) (*roomInfo, er
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
 
 	resp, err := h.hc.Do(req)
 	if err != nil {
@@ -336,6 +337,7 @@ func (h *Handler) saveMessage(_ context.Context, c *hub.Client, content string) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
 
 	resp, err := h.hc.Do(req)
 	if err != nil {

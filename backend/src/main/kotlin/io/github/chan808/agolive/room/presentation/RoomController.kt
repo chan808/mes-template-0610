@@ -30,8 +30,11 @@ class RoomController(private val roomService: RoomService) {
         ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(roomService.create(userId, request)))
 
     @GetMapping
-    fun list(@PageableDefault(size = 20) pageable: Pageable): ResponseEntity<ApiResponse<PageResponse<RoomResponse>>> =
-        ResponseEntity.ok(ApiResponse.of(PageResponse.from(roomService.list(pageable))))
+    fun list(
+        @PageableDefault(size = 20) pageable: Pageable,
+        @AuthenticationPrincipal userId: Long,
+    ): ResponseEntity<ApiResponse<PageResponse<RoomResponse>>> =
+        ResponseEntity.ok(ApiResponse.of(PageResponse.from(roomService.list(userId, pageable))))
 
     @GetMapping("/{id}")
     fun get(@PathVariable id: Long): ResponseEntity<ApiResponse<RoomResponse>> =

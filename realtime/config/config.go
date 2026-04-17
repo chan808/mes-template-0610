@@ -11,6 +11,7 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	InternalAPIURL string
+	InternalSecret string
 }
 
 func Load() *Config {
@@ -20,6 +21,7 @@ func Load() *Config {
 		RedisAddr:      getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
 		InternalAPIURL: getEnv("INTERNAL_API_URL", "http://api:8080"),
+		InternalSecret: mustEnv("INTERNAL_SECRET"),
 	}
 }
 

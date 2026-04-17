@@ -12,7 +12,8 @@ import java.util.UUID
 
 interface RoomRepository : JpaRepository<Room, Long> {
     fun findByIdAndDeletedAtIsNull(id: Long): Room?
-    fun findAllByDeletedAtIsNull(pageable: Pageable): Page<Room>
+    @Query("SELECT r FROM Room r WHERE r.deletedAt IS NULL AND (r.isPrivate = false OR r.ownerId = :userId)")
+    fun findVisibleRooms(@Param("userId") userId: Long, pageable: Pageable): Page<Room>
     fun findByInviteTokenAndDeletedAtIsNull(token: UUID): Room?
 
     @Modifying

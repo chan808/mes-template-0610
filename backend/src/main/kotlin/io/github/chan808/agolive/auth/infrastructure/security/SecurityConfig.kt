@@ -79,13 +79,13 @@ class SecurityConfig(
             }
             .authorizeHttpRequests {
                 it.requestMatchers("/api/auth/**").permitAll()
-                it.requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/api/v1/users").permitAll()
                 it.requestMatchers("/api-docs/**", "/swagger-ui/**").permitAll()
                 if (oauthEnabled) {
                     it.requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                 }
                 it.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                // Go 실시간 서버 전용 내부 API — Nginx에서 외부 차단, Spring Security 불필요
+                // Go 실시간 서버 전용 내부 API — InternalSecretFilter에서 공유 시크릿 검증
                 it.requestMatchers("/internal/rooms/**").permitAll()
                 if (publicInfoEndpoint) {
                     it.requestMatchers("/actuator/info").permitAll()

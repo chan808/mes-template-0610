@@ -13,13 +13,17 @@ import io.github.chan808.agolive.room.presentation.UpdateRoomRequest
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
-class RoomService(private val roomRepository: RoomRepository) : RoomApi {
+class RoomService(
+    private val roomRepository: RoomRepository,
+    private val redisTemplate: StringRedisTemplate,
+) : RoomApi {
 
     private val log = LoggerFactory.getLogger(RoomService::class.java)
 
@@ -32,8 +36,8 @@ class RoomService(private val roomRepository: RoomRepository) : RoomApi {
         return RoomResponse.from(room, includeInviteToken = true)
     }
 
-    fun list(pageable: Pageable): Page<RoomResponse> =
-        roomRepository.findAllByDeletedAtIsNull(pageable).map { RoomResponse.from(it) }
+    fun list(userId: Long, pageable: Pageable): Page<RoomResponse> =
+        roomRepository.findVisibleRooms(userId, pageable).map { RoomResponse.from(it) }
 
     fun get(roomId: Long): RoomResponse = RoomResponse.from(require(roomId))
 
@@ -48,6 +52,10 @@ class RoomService(private val roomRepository: RoomRepository) : RoomApi {
     @Transactional
     fun update(userId: Long, roomId: Long, request: UpdateRoomRequest): RoomResponse {
         val room = requireOwner(userId, roomId)
+        if (request.maxCapacity != null) {
+            val currentCount = redisTemplate.opsForSet().size("room:members:$roomId") ?: 0L
+            if (request.maxCapacity < currentCount) throw RoomException(ErrorCode.CAPACITY_BELOW_CURRENT)
+        }
         room.update(request.name, request.isPrivate, request.maxCapacity)
         log.info("[ROOM] updated roomId={} userId={}", roomId, userId)
         return RoomResponse.from(room)
