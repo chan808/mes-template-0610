@@ -7,6 +7,6 @@ class ModulithVerificationTest {
 
     @Test
     fun `module boundaries are respected`() {
-        ApplicationModules.of(agoliveApplication::class.java).verify()
+        ApplicationModules.of(AgoliveApplication::class.java).verify()
     }
 }
