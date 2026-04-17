@@ -43,6 +43,8 @@ class PasswordResetServiceTest {
         tokenVersion = 0L,
         emailVerified = true,
         provider = null,
+        nickname = null,
+        avatarId = null,
     )
 
     private val oauthUser = localUser.copy(provider = "GOOGLE")

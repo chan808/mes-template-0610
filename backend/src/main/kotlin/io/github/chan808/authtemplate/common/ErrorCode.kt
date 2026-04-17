@@ -27,6 +27,12 @@ enum class ErrorCode(
     INVALID_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
     BREACHED_PASSWORD(HttpStatus.BAD_REQUEST, "이미 유출된 비밀번호입니다. 다른 비밀번호를 사용해 주세요."),
 
+    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 방입니다."),
+    ROOM_FULL(HttpStatus.CONFLICT, "정원이 초과되었습니다."),
+    ROOM_CLOSED(HttpStatus.CONFLICT, "이미 닫힌 방입니다."),
+    INVALID_INVITE_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않은 초대 토큰입니다."),
+    CAPACITY_BELOW_CURRENT(HttpStatus.BAD_REQUEST, "현재 접속자 수보다 적은 정원으로 변경할 수 없습니다."),
+
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),

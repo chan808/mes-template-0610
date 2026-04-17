@@ -113,5 +113,7 @@ class JwtAuthenticationFilterTest {
         tokenVersion = tokenVersion,
         emailVerified = true,
         provider = null,
+        nickname = null,
+        avatarId = null,
     )
 }

@@ -49,6 +49,8 @@ class AuthCommandServiceTest {
         tokenVersion = 0L,
         emailVerified = true,
         provider = null,
+        nickname = null,
+        avatarId = null,
     )
 
     @Test

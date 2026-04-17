@@ -27,6 +27,7 @@ repositories {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.modulith:spring-modulith-bom:2.0.3")
+        mavenBom("org.testcontainers:testcontainers-bom:1.21.0")
     }
 }
 

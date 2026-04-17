@@ -52,13 +52,22 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 
 ## Module Structure (Spring Modulith)
 
-| Module   | 책임 |
-|----------|------|
-| auth     | 인증/인가, JWT 발급·검증, OAuth2, 토큰 블랙리스트 |
-| user     | 사용자 프로필 조회·수정, 아바타 목록 |
-| room     | 방 생성·수정·삭제, 초대 토큰 관리 |
-| message  | 채팅 기록 저장·페이지 조회 |
-| internal | Go 서버 전용 내부 API (/internal/**) |
+| Module   | 책임 | 상태 |
+|----------|------|------|
+| auth     | 인증/인가, JWT 발급·검증, OAuth2, 토큰 블랙리스트 | 구현 완료 |
+| user     | 사용자 프로필 조회·수정, 아바타 목록 | 구현 완료 |
+| room     | 방 생성·수정·삭제, 초대 토큰 관리, 소프트 삭제 스케줄러 | 구현 완료 |
+| message  | 채팅 기록 저장·커서 페이지 조회 | 구현 완료 |
+| internal | Go 서버 전용 내부 API (/internal/**) | 구현 완료 |
+
+### 모듈 간 의존 규칙
+
+타 모듈의 내부 패키지(infrastructure 등) 직접 참조 금지. 공개 API(`{module}/api/` 패키지)를 통해서만 접근한다.
+
+```
+auth   → user :: api, user :: events
+message → room :: api
+```
 
 ---
 
@@ -153,9 +162,11 @@ JWT claims: `sub(userId), nickname, avatarId, jti, iat, exp`
 |------|------|------|
 | UNAUTHORIZED | 401 | 인증 실패 또는 토큰 만료 |
 | FORBIDDEN | 403 | 권한 없음 |
-| ROOM_FULL | 409 | 정원 초과 |
 | ROOM_NOT_FOUND | 404 | 존재하지 않는 방 |
+| ROOM_FULL | 409 | 정원 초과 |
+| ROOM_CLOSED | 409 | 이미 닫힌 방 |
 | INVALID_INVITE_TOKEN | 400 | 유효하지 않은 초대 토큰 |
+| CAPACITY_BELOW_CURRENT | 400 | 현재 접속자 수보다 적은 정원으로 변경 시도 |
 | DUPLICATE_EMAIL | 409 | 이미 가입된 이메일 |
 
 ---

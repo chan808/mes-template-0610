@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
-import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 
@@ -18,7 +18,7 @@ class AuthTemplateApplicationTests {
     companion object {
         @Container
         @JvmField
-        val mysql = MySQLContainer("mysql:8.0")
+        val mysql = PostgreSQLContainer("postgres:16-alpine")
             .withDatabaseName("auth_template_test")
             .withUsername("test")
             .withPassword("test")
