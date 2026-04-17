@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
-import { memberApi } from "@/features/member/api/memberApi";
+import { userApi } from "@/features/member/api/userApi";
 import { roomApi } from "../api/roomApi";
 import SpaceCanvas from "./SpaceCanvas";
 import ChatPanel from "./ChatPanel";
@@ -48,8 +48,8 @@ export default function RoomSpaceView({ roomId }: RoomSpaceViewProps) {
   const { locale } = useParams<{ locale: string }>();
 
   const { data: me, isLoading: meLoading } = useQuery({
-    queryKey: ["member", "me"],
-    queryFn: () => memberApi.getMyInfo().then((res) => res.data.data!),
+    queryKey: ["user", "me"],
+    queryFn: () => userApi.getMyInfo().then((res) => res.data.data!),
   });
 
   const { data: room, isLoading: roomLoading, isError } = useQuery({

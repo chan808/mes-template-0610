@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { memberApi } from "@/features/member/api/memberApi";
+import { userApi } from "@/features/member/api/userApi";
 import { useRooms } from "../hooks/useRooms";
 import RoomCard from "./RoomCard";
 import CreateRoomDialog from "./CreateRoomDialog";
@@ -10,8 +10,8 @@ import { Button } from "@/shared/components/ui/button";
 export default function RoomListView() {
   const { data: rooms = [], isLoading: roomsLoading } = useRooms();
   const { data: me, isLoading: meLoading } = useQuery({
-    queryKey: ["member", "me"],
-    queryFn: () => memberApi.getMyInfo().then((res) => res.data.data!),
+    queryKey: ["user", "me"],
+    queryFn: () => userApi.getMyInfo().then((res) => res.data.data!),
   });
 
   if (roomsLoading || meLoading) {

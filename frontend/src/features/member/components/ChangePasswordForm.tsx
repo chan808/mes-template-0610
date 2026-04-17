@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { AxiosError } from "axios";
-import { memberApi } from "../api/memberApi";
+import { userApi } from "../api/userApi";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import {
@@ -57,7 +57,7 @@ export default function ChangePasswordForm({ provider }: Props) {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await memberApi.changePassword({
+      await userApi.changePassword({
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       });

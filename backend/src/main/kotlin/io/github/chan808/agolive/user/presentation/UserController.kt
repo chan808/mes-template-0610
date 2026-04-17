@@ -27,7 +27,7 @@ class UserController(
 ) {
 
     // 회원가입
-    @PostMapping("/api/users")
+    @PostMapping("/api/v1/users")
     fun signup(
         @RequestBody @Valid request: SignupRequest,
         servletRequest: HttpServletRequest,

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { AxiosError } from "axios";
-import { memberApi } from "../api/memberApi";
+import { userApi } from "../api/userApi";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import {
@@ -37,8 +37,8 @@ export default function ProfileCard() {
   const [editing, setEditing] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["member", "me"],
-    queryFn: () => memberApi.getMyInfo().then((res) => res.data.data!),
+    queryKey: ["user", "me"],
+    queryFn: () => userApi.getMyInfo().then((res) => res.data.data!),
   });
 
   const form = useForm<FormData>({
@@ -49,8 +49,8 @@ export default function ProfileCard() {
   const onSubmit = async (formData: FormData) => {
     try {
       const nickname = formData.nickname?.trim() || null;
-      await memberApi.updateProfile({ nickname });
-      await queryClient.invalidateQueries({ queryKey: ["member", "me"] });
+      await userApi.updateProfile({ nickname });
+      await queryClient.invalidateQueries({ queryKey: ["user", "me"] });
       setEditing(false);
     } catch (error) {
       const detail = (error as AxiosError<{ detail?: string }>).response?.data?.detail;

@@ -1,1 +1,0 @@
--- no-op: member_id 컬럼 불필요, unified users 테이블로 대체됨

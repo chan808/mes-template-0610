@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
-import { memberApi } from "../api/memberApi";
+import { userApi } from "../api/userApi";
 import { useAuthStore } from "@/features/auth/stores/authStore";
 import { Button } from "@/shared/components/ui/button";
 import {
@@ -29,7 +29,7 @@ export default function WithdrawSection() {
     setLoading(true);
     setError("");
     try {
-      await memberApi.withdraw();
+      await userApi.withdraw();
       clearAuth();
       router.replace(`/${locale}/login`);
     } catch {

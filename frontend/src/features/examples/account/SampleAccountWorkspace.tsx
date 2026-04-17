@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { memberApi } from "@/features/member/api/memberApi";
+import { userApi } from "@/features/member/api/userApi";
 import ProfileCard from "@/features/member/components/ProfileCard";
 import ChangePasswordForm from "@/features/member/components/ChangePasswordForm";
 import WithdrawSection from "@/features/member/components/WithdrawSection";
@@ -9,8 +9,8 @@ import LogoutButton from "@/features/auth/components/LogoutButton";
 
 export default function SampleAccountWorkspace() {
   const { data } = useQuery({
-    queryKey: ["member", "me"],
-    queryFn: () => memberApi.getMyInfo().then((res) => res.data.data!),
+    queryKey: ["user", "me"],
+    queryFn: () => userApi.getMyInfo().then((res) => res.data.data!),
   });
 
   return (

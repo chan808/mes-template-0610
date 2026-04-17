@@ -12,7 +12,7 @@ export interface TokenResponse {
   accessToken: string;
 }
 
-export interface MemberResponse {
+export interface UserResponse {
   id: number;
   email: string;
   nickname: string | null;
