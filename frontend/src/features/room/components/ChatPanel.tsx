@@ -17,11 +17,24 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
 
-  // 새 메시지가 올 때 최하단으로 스크롤
+  // 히스토리 prepend가 아닌 신규 메시지 append일 때만 하단으로 스크롤
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    if (last.id === lastMessageIdRef.current) return;
+
+    const el = listRef.current;
+    if (!el) return;
+
+    // 기존 마지막 메시지 id 기준 — 처음 렌더 or 하단 근처면 스크롤
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!lastMessageIdRef.current || isNearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    lastMessageIdRef.current = last.id;
+  }, [messages]);
 
   function handleSend() {
     const content = input.trim();

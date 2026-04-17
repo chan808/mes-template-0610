@@ -9,12 +9,12 @@ import { Button } from "@/shared/components/ui/button";
 
 export default function RoomListView() {
   const { data: rooms = [], isLoading: roomsLoading } = useRooms();
-  const { data: me } = useQuery({
+  const { data: me, isLoading: meLoading } = useQuery({
     queryKey: ["member", "me"],
     queryFn: () => memberApi.getMyInfo().then((res) => res.data.data!),
   });
 
-  if (roomsLoading) {
+  if (roomsLoading || meLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-muted-foreground">불러오는 중...</p>
@@ -45,7 +45,7 @@ export default function RoomListView() {
               <RoomCard
                 key={room.id}
                 room={room}
-                currentUserId={me?.id ?? -1}
+                currentUserId={me!.id}
               />
             ))}
           </div>

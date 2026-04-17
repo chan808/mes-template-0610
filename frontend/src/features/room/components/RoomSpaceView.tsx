@@ -8,6 +8,7 @@ import SpaceCanvas from "./SpaceCanvas";
 import ChatPanel from "./ChatPanel";
 import MemberList from "./MemberList";
 import { useWebSocket } from "../hooks/useWebSocket";
+import { roomKeys } from "../hooks/useRooms";
 
 interface RoomSpaceViewProps {
   roomId: number;
@@ -27,7 +28,7 @@ function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUs
       <div className="flex flex-1 overflow-hidden">
         {/* 캔버스 영역 (스크롤 가능) */}
         <div className="flex-1 overflow-auto p-4">
-          <SpaceCanvas roomId={roomId} myUserId={myUserId} myNickname={myNickname} />
+          <SpaceCanvas myUserId={myUserId} myNickname={myNickname} onSend={send} />
         </div>
 
         {/* 사이드바: 접속자 목록 + 채팅 */}
@@ -52,7 +53,7 @@ export default function RoomSpaceView({ roomId }: RoomSpaceViewProps) {
   });
 
   const { data: room, isLoading: roomLoading, isError } = useQuery({
-    queryKey: ["rooms", "detail", roomId],
+    queryKey: roomKeys.detail(roomId),
     queryFn: () => roomApi.getRoom(roomId).then((res) => res.data.data!),
     retry: false,
   });

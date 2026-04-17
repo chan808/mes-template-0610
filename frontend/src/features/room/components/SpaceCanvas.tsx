@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePresenceStore, CANVAS_WIDTH, CANVAS_HEIGHT, AVATAR_SIZE } from "../stores/presenceStore";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { ClientMessage } from "../types/ws";
 
 const MOVE_STEP = 5;
 const MOVE_SEND_THROTTLE_MS = 100;
 
-// 아바타별 색상 (avatarId 기반, 없으면 userId 기반)
 const AVATAR_COLORS = [
   "#6366f1", "#ec4899", "#f59e0b", "#10b981",
   "#3b82f6", "#ef4444", "#8b5cf6", "#14b8a6",
@@ -18,13 +17,13 @@ function getAvatarColor(id: number) {
 }
 
 interface SpaceCanvasProps {
-  roomId: number;
   myUserId: number;
   myNickname: string;
+  onSend: (msg: ClientMessage) => void;
 }
 
-export default function SpaceCanvas({ roomId, myUserId, myNickname }: SpaceCanvasProps) {
-  const { send } = useWebSocket(roomId);
+export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanvasProps) {
+  const send = onSend;
   const { presences, myPosition, setMyPosition } = usePresenceStore();
 
   const pressedKeysRef = useRef<Set<string>>(new Set());
