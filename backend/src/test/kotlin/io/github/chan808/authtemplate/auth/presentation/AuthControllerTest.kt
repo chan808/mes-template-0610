@@ -12,9 +12,9 @@ import io.github.chan808.authtemplate.auth.presentation.AuthController
 import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ClientIpResolver
 import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.MemberException
+import io.github.chan808.authtemplate.common.UserException
 import io.github.chan808.authtemplate.common.RateLimitException
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.UserApi
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -45,7 +45,7 @@ class AuthControllerTest {
     lateinit var mockMvc: MockMvc
 
     @MockkBean lateinit var authCommandService: AuthCommandService
-    @MockkBean lateinit var memberApi: MemberApi
+    @MockkBean lateinit var userApi: UserApi
     @MockkBean lateinit var passwordResetService: PasswordResetService
     @MockkBean lateinit var clientIpResolver: ClientIpResolver
     @MockkBean lateinit var oAuthCodeStore: OAuthCodeStore
@@ -189,8 +189,8 @@ class AuthControllerTest {
     }
 
     @Test
-    fun `verify email delegates to member api`() {
-        every { memberApi.verifyEmail("valid-token") } just Runs
+    fun `verify email delegates to user api`() {
+        every { userApi.verifyEmail("valid-token") } just Runs
 
         mockMvc.post("/api/auth/verify-email") {
             contentType = MediaType.APPLICATION_JSON
@@ -201,7 +201,7 @@ class AuthControllerTest {
 
     @Test
     fun `invalid verification token returns 400`() {
-        every { memberApi.verifyEmail("bad-token") } throws MemberException(ErrorCode.VERIFICATION_TOKEN_INVALID)
+        every { userApi.verifyEmail("bad-token") } throws UserException(ErrorCode.VERIFICATION_TOKEN_INVALID)
 
         mockMvc.post("/api/auth/verify-email") {
             contentType = MediaType.APPLICATION_JSON
@@ -212,7 +212,7 @@ class AuthControllerTest {
 
     @Test
     fun `resend verification mail returns 200`() {
-        every { memberApi.resendVerification("test@example.com", "127.0.0.1") } just Runs
+        every { userApi.resendVerification("test@example.com", "127.0.0.1") } just Runs
 
         mockMvc.post("/api/auth/verify-email/resend") {
             contentType = MediaType.APPLICATION_JSON
@@ -224,7 +224,7 @@ class AuthControllerTest {
 
     @Test
     fun `resend verification mail rate limit returns 429`() {
-        every { memberApi.resendVerification("test@example.com", "127.0.0.1") } throws RateLimitException(retryAfterSeconds = 900L)
+        every { userApi.resendVerification("test@example.com", "127.0.0.1") } throws RateLimitException(retryAfterSeconds = 900L)
 
         mockMvc.post("/api/auth/verify-email/resend") {
             contentType = MediaType.APPLICATION_JSON

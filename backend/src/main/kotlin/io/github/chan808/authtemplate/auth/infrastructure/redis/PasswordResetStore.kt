@@ -13,8 +13,8 @@ class PasswordResetStore(private val redisTemplate: StringRedisTemplate) : Passw
         private const val TTL_SECONDS = 1800L // 30분
     }
 
-    override fun save(token: String, memberId: Long) {
-        redisTemplate.opsForValue().set("$PREFIX$token", memberId.toString(), TTL_SECONDS, TimeUnit.SECONDS)
+    override fun save(token: String, userId: Long) {
+        redisTemplate.opsForValue().set("$PREFIX$token", userId.toString(), TTL_SECONDS, TimeUnit.SECONDS)
     }
 
     override fun consume(token: String): Long? =

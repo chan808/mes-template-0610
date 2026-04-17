@@ -9,8 +9,8 @@ import io.github.chan808.authtemplate.auth.presentation.LoginRequest
 import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ErrorCode
 import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.member.api.AuthMemberView
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.AuthUserView
+import io.github.chan808.authtemplate.user.api.UserApi
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -26,14 +26,14 @@ import kotlin.test.assertTrue
 
 class AuthCommandServiceTest {
 
-    private val memberApi: MemberApi = mockk()
+    private val userApi: UserApi = mockk()
     private val passwordEncoder: PasswordEncoder = mockk()
     private val accessTokenPort: AccessTokenPort = mockk()
     private val tokenStore: TokenStore = mockk()
     private val loginRateLimitService: LoginRateLimitService = mockk()
     private val domainMetrics: DomainMetrics = mockk(relaxed = true)
     private val authCommandService = AuthCommandService(
-        memberApi,
+        userApi,
         passwordEncoder,
         accessTokenPort,
         tokenStore,
@@ -41,7 +41,7 @@ class AuthCommandServiceTest {
         domainMetrics,
     )
 
-    private val memberView = AuthMemberView(
+    private val userView = AuthUserView(
         id = 1L,
         email = "test@example.com",
         encodedPassword = "encoded-password",
@@ -54,7 +54,7 @@ class AuthCommandServiceTest {
     @Test
     fun `valid credentials return access token and refresh token`() {
         every { loginRateLimitService.check(any(), any()) } just Runs
-        every { memberApi.findAuthMemberByEmail("test@example.com") } returns memberView
+        every { userApi.findAuthUserByEmail("test@example.com") } returns userView
         every { passwordEncoder.matches(any(), any()) } returns true
         every { accessTokenPort.generateAccessToken(1L, "USER", 0L) } returns "access-token"
         every { tokenStore.save(any(), any(), any()) } just Runs
@@ -69,7 +69,7 @@ class AuthCommandServiceTest {
     @Test
     fun `invalid password throws invalid credentials`() {
         every { loginRateLimitService.check(any(), any()) } just Runs
-        every { memberApi.findAuthMemberByEmail(any()) } returns memberView
+        every { userApi.findAuthUserByEmail(any()) } returns userView
         every { passwordEncoder.matches(any(), any()) } returns false
 
         val ex = assertThrows<AuthException> {
@@ -88,30 +88,30 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    fun `refresh token mismatch revokes all member sessions and throws mismatch`() {
+    fun `refresh token mismatch revokes all user sessions and throws mismatch`() {
         val sid = UUID.randomUUID().toString()
         val session = RefreshTokenSession(
-            memberId = 1L,
+            userId = 1L,
             role = "USER",
             tokenHash = "wrong-hash",
             absoluteExpiryEpoch = Instant.now().plusSeconds(3600).epochSecond,
         )
         every { tokenStore.tryLock(sid) } returns true
         every { tokenStore.find(sid) } returns session
-        every { tokenStore.deleteAllSessionsForMember(1L) } just Runs
+        every { tokenStore.deleteAllSessionsForUser(1L) } just Runs
         every { tokenStore.releaseLock(sid) } just Runs
 
         val ex = assertThrows<AuthException> { authCommandService.reissue("$sid.actualrandompart") }
 
         assertEquals(ErrorCode.REFRESH_TOKEN_MISMATCH, ex.errorCode)
-        verify { tokenStore.deleteAllSessionsForMember(1L) }
+        verify { tokenStore.deleteAllSessionsForUser(1L) }
     }
 
     @Test
     fun `logout removes session from token store`() {
         val sid = UUID.randomUUID().toString()
         val session = RefreshTokenSession(
-            memberId = 1L,
+            userId = 1L,
             role = "USER",
             tokenHash = "hash-value",
             absoluteExpiryEpoch = Instant.now().plusSeconds(3600).epochSecond,

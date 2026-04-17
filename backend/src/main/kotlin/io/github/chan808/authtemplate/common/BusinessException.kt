@@ -13,7 +13,7 @@ class AuthException(
     cause: Throwable? = null,
 ) : BusinessException(errorCode, message, cause)
 
-class MemberException(
+class UserException(
     errorCode: ErrorCode,
     message: String = errorCode.message,
     cause: Throwable? = null,

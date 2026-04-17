@@ -9,7 +9,7 @@ import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ErrorCode
 import io.github.chan808.authtemplate.common.maskEmail
 import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.UserApi
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -21,7 +21,7 @@ import java.util.UUID
 
 @Service
 class AuthCommandService(
-    private val memberApi: MemberApi,
+    private val userApi: UserApi,
     private val passwordEncoder: PasswordEncoder,
     private val accessTokenPort: AccessTokenPort,
     private val tokenStore: TokenStore,
@@ -36,25 +36,25 @@ class AuthCommandService(
         val email = request.email.lowercase().trim()
         loginRateLimitService.check(ip, email)
 
-        val member = memberApi.findAuthMemberByEmail(email) ?: run {
+        val user = userApi.findAuthUserByEmail(email) ?: run {
             domainMetrics.recordLoginFailure("email_not_found")
             log.warn("[AUTH] login failed email={} reason=EMAIL_NOT_FOUND", maskEmail(email))
             throw AuthException(ErrorCode.INVALID_CREDENTIALS)
         }
 
-        if (member.isOAuthAccount) {
+        if (user.isOAuthAccount) {
             domainMetrics.recordLoginFailure("oauth_account")
-            log.warn("[AUTH] login failed email={} reason=OAUTH_ACCOUNT provider={}", maskEmail(email), member.provider)
+            log.warn("[AUTH] login failed email={} reason=OAUTH_ACCOUNT provider={}", maskEmail(email), user.provider)
             throw AuthException(ErrorCode.OAUTH_ACCOUNT_NO_PASSWORD)
         }
 
-        if (!passwordEncoder.matches(request.password, member.encodedPassword)) {
+        if (!passwordEncoder.matches(request.password, user.encodedPassword)) {
             domainMetrics.recordLoginFailure("invalid_password")
             log.warn("[AUTH] login failed email={} reason=INVALID_PASSWORD", maskEmail(email))
             throw AuthException(ErrorCode.INVALID_CREDENTIALS)
         }
 
-        if (!member.emailVerified) {
+        if (!user.emailVerified) {
             domainMetrics.recordLoginFailure("email_not_verified")
             log.warn("[AUTH] login failed email={} reason=EMAIL_NOT_VERIFIED", maskEmail(email))
             throw AuthException(ErrorCode.EMAIL_NOT_VERIFIED)
@@ -64,17 +64,17 @@ class AuthCommandService(
         tokenStore.save(
             sid = sid,
             session = RefreshTokenSession(
-                memberId = member.id,
-                role = member.role,
+                userId = user.id,
+                role = user.role,
                 tokenHash = hashToken(rt),
                 absoluteExpiryEpoch = Instant.now().plusSeconds(30L * 24 * 3600).epochSecond,
             ),
             ttlSeconds = 7L * 24 * 3600,
         )
-        tokenStore.addSession(member.id, sid)
+        tokenStore.addSession(user.id, sid)
         domainMetrics.recordLoginSuccess()
 
-        return accessTokenPort.generateAccessToken(member.id, member.role, member.tokenVersion) to rt
+        return accessTokenPort.generateAccessToken(user.id, user.role, user.tokenVersion) to rt
     }
 
     fun reissue(rtToken: String): Pair<String, String> {
@@ -96,14 +96,14 @@ class AuthCommandService(
                     hashToken(rtToken).toByteArray(Charsets.UTF_8),
                 )
             ) {
-                tokenStore.deleteAllSessionsForMember(session.memberId)
+                tokenStore.deleteAllSessionsForUser(session.userId)
                 domainMetrics.recordRefreshTokenReissueFailure("token_mismatch")
-                log.error("[SECURITY] refresh token reuse detected, all sessions revoked memberId={}", session.memberId)
+                log.error("[SECURITY] refresh token reuse detected, all sessions revoked userId={}", session.userId)
                 throw AuthException(ErrorCode.REFRESH_TOKEN_MISMATCH)
             }
 
             if (session.absoluteExpiryEpoch < Instant.now().epochSecond) {
-                tokenStore.deleteSession(session.memberId, sid)
+                tokenStore.deleteSession(session.userId, sid)
                 domainMetrics.recordRefreshTokenReissueFailure("expired")
                 throw AuthException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)
             }
@@ -112,13 +112,13 @@ class AuthCommandService(
             tokenStore.save(sid, session.copy(tokenHash = hashToken(newRt)), 7L * 24 * 3600)
             domainMetrics.recordRefreshTokenReissueSuccess()
 
-            val member = memberApi.findAuthMemberById(session.memberId) ?: run {
-                tokenStore.deleteSession(session.memberId, sid)
-                domainMetrics.recordRefreshTokenReissueFailure("member_not_found")
+            val user = userApi.findAuthUserById(session.userId) ?: run {
+                tokenStore.deleteSession(session.userId, sid)
+                domainMetrics.recordRefreshTokenReissueFailure("user_not_found")
                 throw AuthException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)
             }
 
-            return accessTokenPort.generateAccessToken(member.id, member.role, member.tokenVersion) to newRt
+            return accessTokenPort.generateAccessToken(user.id, user.role, user.tokenVersion) to newRt
         } finally {
             tokenStore.releaseLock(sid)
         }
@@ -128,30 +128,30 @@ class AuthCommandService(
         rtToken ?: return
         val sid = parseSid(rtToken)
         val session = tokenStore.find(sid) ?: return
-        tokenStore.deleteSession(session.memberId, sid)
+        tokenStore.deleteSession(session.userId, sid)
         domainMetrics.recordLogout()
     }
 
-    fun issueTokensForOAuth(memberId: Long): Pair<String, String> {
-        val member = memberApi.findAuthMemberById(memberId)
-            ?: throw AuthException(ErrorCode.MEMBER_NOT_FOUND)
+    fun issueTokensForOAuth(userId: Long): Pair<String, String> {
+        val user = userApi.findAuthUserById(userId)
+            ?: throw AuthException(ErrorCode.USER_NOT_FOUND)
         val (sid, rt) = generateRefreshToken()
         tokenStore.save(
             sid = sid,
             session = RefreshTokenSession(
-                memberId = memberId,
-                role = member.role,
+                userId = userId,
+                role = user.role,
                 tokenHash = hashToken(rt),
                 absoluteExpiryEpoch = Instant.now().plusSeconds(30L * 24 * 3600).epochSecond,
             ),
             ttlSeconds = 7L * 24 * 3600,
         )
-        tokenStore.addSession(memberId, sid)
-        return accessTokenPort.generateAccessToken(member.id, member.role, member.tokenVersion) to rt
+        tokenStore.addSession(userId, sid)
+        return accessTokenPort.generateAccessToken(user.id, user.role, user.tokenVersion) to rt
     }
 
-    override fun invalidateAllSessions(memberId: Long) {
-        tokenStore.deleteAllSessionsForMember(memberId)
+    override fun invalidateAllSessions(userId: Long) {
+        tokenStore.deleteAllSessionsForUser(userId)
     }
 
     private fun generateRefreshToken(): Pair<String, String> {

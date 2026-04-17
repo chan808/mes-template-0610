@@ -18,8 +18,10 @@
 ```sql
 avatar_templates (id, name, image_url, is_active)
 
-users (id, email, password_hash[nullable], nickname, avatar_id→avatar_templates,
-       provider[nullable], provider_id[nullable], created_at, updated_at)
+users (id, email, password_hash[nullable], nickname[nullable], avatar_id→avatar_templates[nullable],
+       provider[nullable], provider_id[nullable], role[default USER],
+       email_verified[default false], token_version[default 0], withdrawn_at[nullable],
+       created_at, updated_at)
 
 rooms (id, invite_token[uuid, unique], invite_token_expires_at[nullable],
        name, owner_id→users, is_private, max_capacity[default 10],
@@ -39,8 +41,12 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 |---|---|---|---|
 | `presence:{roomId}:{userId}` | String (JSON) | 30s | 위치 {x,y,nickname,avatarId} |
 | `room:members:{roomId}` | Set | - | 현재 접속자 |
-| `blacklist:token:{jti}` | String | 잔여 만료 | 로그아웃 토큰 |
-| `refresh:{userId}` | String | 7d | Refresh Token |
+| `RT:{sid}` | String (JSON) | 7d | Refresh Token 세션 |
+| `USER_SESSIONS:{userId}` | Set | 30d | 사용자별 세션 SID 인덱스 |
+| `ATV:{userId}` | String | 1h | Access Token Version 캐시 |
+| `LOCK:REISSUE:{sid}` | String | 3s | Reissue 동시 요청 방지 락 |
+| `RESET:{token}` | String | 30m | 비밀번호 재설정 토큰 |
+| `EMAIL_VERIFY_USER:{token}` | String | - | 이메일 인증 토큰 |
 
 ---
 
@@ -61,14 +67,20 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 ### agolive-api
 
 ```
-POST   /api/v1/auth/signup
-POST   /api/v1/auth/login
-POST   /api/v1/auth/logout
-POST   /api/v1/auth/refresh
-GET    /api/v1/auth/oauth2/{provider}
+POST   /api/users                          -- 회원가입 (이메일/비밀번호)
+POST   /api/auth/login
+POST   /api/auth/logout
+POST   /api/auth/reissue
+POST   /api/auth/verify-email
+POST   /api/auth/verify-email/resend
+POST   /api/auth/password-reset/request
+POST   /api/auth/password-reset/confirm
+GET    /login/oauth2/code/{provider}       -- OAuth2 콜백
 
 GET    /api/v1/users/me
-PATCH  /api/v1/users/me
+PATCH  /api/v1/users/me                   -- nickname, avatarId
+PATCH  /api/v1/users/me/password
+DELETE /api/v1/users/me
 GET    /api/v1/avatars
 
 POST   /api/v1/rooms

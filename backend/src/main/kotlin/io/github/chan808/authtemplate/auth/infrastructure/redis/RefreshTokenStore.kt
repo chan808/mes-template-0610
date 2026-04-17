@@ -18,8 +18,8 @@ class RefreshTokenStore(
         private const val RT_PREFIX = "RT:"
         private const val LOCK_PREFIX = "LOCK:REISSUE:"
         private const val LOCK_TTL = 3L
-        private const val MEMBER_SESSIONS_PREFIX = "MEMBER_SESSIONS:"
-        private const val MEMBER_SESSIONS_TTL = 30L * 24 * 3600
+        private const val USER_SESSIONS_PREFIX = "USER_SESSIONS:"
+        private const val USER_SESSIONS_TTL = 30L * 24 * 3600
         private const val ACCESS_TOKEN_VERSION_PREFIX = "ATV:"
 
         // ATV 캐시는 AT 검증 시 DB 조회를 줄이는 것만이 목적이다.
@@ -71,10 +71,10 @@ class RefreshTokenStore(
         redisTemplate.opsForValue().get("$RT_PREFIX$sid")
             ?.let { objectMapper.readValue(it, RefreshTokenSession::class.java) }
 
-    override fun deleteSession(memberId: Long, sid: String) {
+    override fun deleteSession(userId: Long, sid: String) {
         redisTemplate.execute(
             DELETE_SESSION_SCRIPT,
-            listOf("$RT_PREFIX$sid", "$MEMBER_SESSIONS_PREFIX$memberId"),
+            listOf("$RT_PREFIX$sid", "$USER_SESSIONS_PREFIX$userId"),
             sid,
         )
     }
@@ -86,30 +86,30 @@ class RefreshTokenStore(
         redisTemplate.delete("$LOCK_PREFIX$sid")
     }
 
-    override fun addSession(memberId: Long, sid: String) {
-        val key = "$MEMBER_SESSIONS_PREFIX$memberId"
+    override fun addSession(userId: Long, sid: String) {
+        val key = "$USER_SESSIONS_PREFIX$userId"
         redisTemplate.opsForSet().add(key, sid)
-        redisTemplate.expire(key, MEMBER_SESSIONS_TTL, TimeUnit.SECONDS)
+        redisTemplate.expire(key, USER_SESSIONS_TTL, TimeUnit.SECONDS)
     }
 
-    override fun deleteAllSessionsForMember(memberId: Long) {
-        val setKey = "$MEMBER_SESSIONS_PREFIX$memberId"
+    override fun deleteAllSessionsForUser(userId: Long) {
+        val setKey = "$USER_SESSIONS_PREFIX$userId"
         redisTemplate.execute(DELETE_ALL_SESSIONS_SCRIPT, listOf(setKey), RT_PREFIX)
     }
 
-    override fun findAccessTokenVersion(memberId: Long): Long? =
-        redisTemplate.opsForValue().get("$ACCESS_TOKEN_VERSION_PREFIX$memberId")?.toLongOrNull()
+    override fun findAccessTokenVersion(userId: Long): Long? =
+        redisTemplate.opsForValue().get("$ACCESS_TOKEN_VERSION_PREFIX$userId")?.toLongOrNull()
 
-    override fun cacheAccessTokenVersion(memberId: Long, tokenVersion: Long) {
+    override fun cacheAccessTokenVersion(userId: Long, tokenVersion: Long) {
         redisTemplate.opsForValue().set(
-            "$ACCESS_TOKEN_VERSION_PREFIX$memberId",
+            "$ACCESS_TOKEN_VERSION_PREFIX$userId",
             tokenVersion.toString(),
             ACCESS_TOKEN_VERSION_TTL,
             TimeUnit.SECONDS,
         )
     }
 
-    override fun deleteAccessTokenVersion(memberId: Long) {
-        redisTemplate.delete("$ACCESS_TOKEN_VERSION_PREFIX$memberId")
+    override fun deleteAccessTokenVersion(userId: Long) {
+        redisTemplate.delete("$ACCESS_TOKEN_VERSION_PREFIX$userId")
     }
 }

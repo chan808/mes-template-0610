@@ -6,7 +6,7 @@ import io.github.chan808.authtemplate.auth.infrastructure.oauth2.CustomOidcUserS
 import io.github.chan808.authtemplate.auth.infrastructure.oauth2.LocaleAwareOAuth2AuthorizationRequestResolver
 import io.github.chan808.authtemplate.auth.infrastructure.oauth2.OAuth2FailureHandler
 import io.github.chan808.authtemplate.auth.infrastructure.oauth2.OAuth2SuccessHandler
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.UserApi
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -32,7 +32,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableMethodSecurity
 class SecurityConfig(
     private val jwtProvider: JwtProvider,
-    private val memberApi: MemberApi,
+    private val userApi: UserApi,
     private val tokenStore: TokenStore,
     private val securityExceptionHandler: SecurityExceptionHandler,
     @Value("\${cors.allowed-origin:http://localhost:3000}") private val allowedOrigin: String,
@@ -79,7 +79,7 @@ class SecurityConfig(
             }
             .authorizeHttpRequests {
                 it.requestMatchers("/api/auth/**").permitAll()
-                it.requestMatchers(HttpMethod.POST, "/api/members").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                 it.requestMatchers("/api-docs/**", "/swagger-ui/**").permitAll()
                 if (oauthEnabled) {
                     it.requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
@@ -97,7 +97,7 @@ class SecurityConfig(
                 }
                 it.anyRequest().authenticated()
             }
-            .addFilterBefore(JwtAuthenticationFilter(jwtProvider, memberApi, tokenStore), UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(JwtAuthenticationFilter(jwtProvider, userApi, tokenStore), UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling {
                 it.authenticationEntryPoint(securityExceptionHandler)
                 it.accessDeniedHandler(securityExceptionHandler)

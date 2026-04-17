@@ -11,7 +11,7 @@ class AuthQueryService(
 
     fun validateToken(token: String): Long? =
         try {
-            accessTokenPort.getMemberId(token)
+            accessTokenPort.getUserId(token)
         } catch (_: JwtException) {
             null
         }

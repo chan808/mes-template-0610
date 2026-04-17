@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service
  */
 @Service
 class CustomOidcUserService(
-    private val memberOAuthService: MemberOAuthService,
+    private val userOAuthService: UserOAuthService,
 ) : OidcUserService() {
 
     private val log = LoggerFactory.getLogger(CustomOidcUserService::class.java)
@@ -23,9 +23,9 @@ class CustomOidcUserService(
         val registrationId = userRequest.clientRegistration.registrationId
         val userInfo = oAuth2UserInfoOf(registrationId, oidcUser.attributes)
 
-        val member = memberOAuthService.findOrCreate(userInfo)
-        log.info("[AUTH] OIDC 로그인 provider={} memberId={}", userInfo.provider, member.id)
+        val user = userOAuthService.findOrCreate(userInfo)
+        log.info("[AUTH] OIDC 로그인 provider={} userId={}", userInfo.provider, user.id)
 
-        return CustomOidcUser(oidcUser, member.id, userInfo.provider)
+        return CustomOidcUser(oidcUser, user.id, userInfo.provider)
     }
 }

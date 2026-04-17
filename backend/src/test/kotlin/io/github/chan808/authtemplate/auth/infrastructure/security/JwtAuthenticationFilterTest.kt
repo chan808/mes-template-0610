@@ -2,8 +2,8 @@ package io.github.chan808.authtemplate.auth.infrastructure.security
 
 import io.github.chan808.authtemplate.auth.application.port.TokenStore
 import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.member.api.AuthMemberView
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.AuthUserView
+import io.github.chan808.authtemplate.user.api.UserApi
 import io.jsonwebtoken.Claims
 import io.mockk.every
 import io.mockk.just
@@ -21,9 +21,9 @@ import kotlin.test.assertNull
 class JwtAuthenticationFilterTest {
 
     private val jwtProvider: JwtProvider = mockk()
-    private val memberApi: MemberApi = mockk()
+    private val userApi: UserApi = mockk()
     private val tokenStore: TokenStore = mockk()
-    private val filter = JwtAuthenticationFilter(jwtProvider, memberApi, tokenStore)
+    private val filter = JwtAuthenticationFilter(jwtProvider, userApi, tokenStore)
 
     @AfterEach
     fun tearDown() {
@@ -32,7 +32,7 @@ class JwtAuthenticationFilterTest {
 
     @Test
     fun `cached token version match authenticates request`() {
-        every { jwtProvider.validate("valid-token") } returns claims(memberId = 1L, role = "USER", tokenVersion = 2L)
+        every { jwtProvider.validate("valid-token") } returns claims(userId = 1L, role = "USER", tokenVersion = 2L)
         every { tokenStore.findAccessTokenVersion(1L) } returns 2L
 
         val request = MockHttpServletRequest().apply {
@@ -47,10 +47,10 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    fun `cache miss loads token version from member api and caches it`() {
-        every { jwtProvider.validate("valid-token") } returns claims(memberId = 1L, role = "USER", tokenVersion = 3L)
+    fun `cache miss loads token version from user api and caches it`() {
+        every { jwtProvider.validate("valid-token") } returns claims(userId = 1L, role = "USER", tokenVersion = 3L)
         every { tokenStore.findAccessTokenVersion(1L) } returns null
-        every { memberApi.findAuthMemberById(1L) } returns authMemberView(tokenVersion = 3L)
+        every { userApi.findAuthUserById(1L) } returns authUserView(tokenVersion = 3L)
         every { tokenStore.cacheAccessTokenVersion(1L, 3L) } just runs
 
         val request = MockHttpServletRequest().apply {
@@ -66,7 +66,7 @@ class JwtAuthenticationFilterTest {
 
     @Test
     fun `mismatched token version marks token invalid`() {
-        every { jwtProvider.validate("stale-token") } returns claims(memberId = 1L, role = "USER", tokenVersion = 1L)
+        every { jwtProvider.validate("stale-token") } returns claims(userId = 1L, role = "USER", tokenVersion = 1L)
         every { tokenStore.findAccessTokenVersion(1L) } returns 2L
 
         val request = MockHttpServletRequest().apply {
@@ -81,10 +81,10 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    fun `cache miss with missing member marks token invalid`() {
-        every { jwtProvider.validate("withdrawn-token") } returns claims(memberId = 1L, role = "USER", tokenVersion = 0L)
+    fun `cache miss with missing user marks token invalid`() {
+        every { jwtProvider.validate("withdrawn-token") } returns claims(userId = 1L, role = "USER", tokenVersion = 0L)
         every { tokenStore.findAccessTokenVersion(1L) } returns null
-        every { memberApi.findAuthMemberById(1L) } returns null
+        every { userApi.findAuthUserById(1L) } returns null
 
         val request = MockHttpServletRequest().apply {
             addHeader("Authorization", "Bearer withdrawn-token")
@@ -97,17 +97,17 @@ class JwtAuthenticationFilterTest {
         assertEquals(ErrorCode.TOKEN_INVALID, request.getAttribute("jwt-error"))
     }
 
-    private fun claims(memberId: Long, role: String, tokenVersion: Long): Claims {
+    private fun claims(userId: Long, role: String, tokenVersion: Long): Claims {
         val claims: Claims = mockk()
-        every { claims.subject } returns memberId.toString()
+        every { claims.subject } returns userId.toString()
         every { claims["role"] } returns role
         every { claims["tokenVersion"] } returns tokenVersion
         return claims
     }
 
-    private fun authMemberView(tokenVersion: Long) = AuthMemberView(
+    private fun authUserView(tokenVersion: Long) = AuthUserView(
         id = 1L,
-        email = "member@example.com",
+        email = "user@example.com",
         encodedPassword = "encoded",
         role = "USER",
         tokenVersion = tokenVersion,

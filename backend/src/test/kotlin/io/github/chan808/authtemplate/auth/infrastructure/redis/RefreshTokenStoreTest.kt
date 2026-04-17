@@ -36,7 +36,7 @@ class RefreshTokenStoreTest {
     private lateinit var store: RefreshTokenStore
 
     private val session = RefreshTokenSession(
-        memberId = 1L,
+        userId = 1L,
         role = "USER",
         tokenHash = "hash-value",
         absoluteExpiryEpoch = Instant.now().plusSeconds(2592000).epochSecond,
@@ -67,7 +67,7 @@ class RefreshTokenStoreTest {
 
         val found = store.find(sid)
         assertNotNull(found)
-        assertEquals(1L, found.memberId)
+        assertEquals(1L, found.userId)
         assertEquals("USER", found.role)
         assertEquals("hash-value", found.tokenHash)
     }
@@ -78,7 +78,7 @@ class RefreshTokenStoreTest {
     }
 
     @Test
-    fun `delete session removes token and member index entry`() {
+    fun `delete session removes token and user index entry`() {
         val sid = UUID.randomUUID().toString()
         store.save(sid, session, ttlSeconds = 3600)
         store.addSession(1L, sid)
@@ -86,7 +86,7 @@ class RefreshTokenStoreTest {
         store.deleteSession(1L, sid)
 
         assertNull(store.find(sid))
-        assertFalse(redisTemplate.opsForSet().isMember("MEMBER_SESSIONS:1", sid) ?: false)
+        assertFalse(redisTemplate.opsForSet().isMember("USER_SESSIONS:1", sid) ?: false)
     }
 
     @Test
@@ -117,15 +117,15 @@ class RefreshTokenStoreTest {
     }
 
     @Test
-    fun `delete all sessions for member removes keys and set`() {
+    fun `delete all sessions for user removes keys and set`() {
         val sid = UUID.randomUUID().toString()
         store.save(sid, session, ttlSeconds = 3600)
         store.addSession(1L, sid)
 
-        store.deleteAllSessionsForMember(1L)
+        store.deleteAllSessionsForUser(1L)
 
         assertNull(store.find(sid))
-        assertFalse(redisTemplate.hasKey("MEMBER_SESSIONS:1"))
+        assertFalse(redisTemplate.hasKey("USER_SESSIONS:1"))
     }
 
     @Test
@@ -136,15 +136,15 @@ class RefreshTokenStoreTest {
             store.addSession(1L, sid)
         }
 
-        store.deleteAllSessionsForMember(1L)
+        store.deleteAllSessionsForUser(1L)
 
         sids.forEach { sid -> assertNull(store.find(sid)) }
-        assertFalse(redisTemplate.hasKey("MEMBER_SESSIONS:1"))
+        assertFalse(redisTemplate.hasKey("USER_SESSIONS:1"))
     }
 
     @Test
-    fun `delete all sessions on empty member does nothing`() {
-        store.deleteAllSessionsForMember(99L)
+    fun `delete all sessions on empty user does nothing`() {
+        store.deleteAllSessionsForUser(99L)
     }
 
     @Test

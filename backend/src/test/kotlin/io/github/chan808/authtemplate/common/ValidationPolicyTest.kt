@@ -1,8 +1,8 @@
 package io.github.chan808.authtemplate.common
 
 import io.github.chan808.authtemplate.auth.presentation.PasswordResetConfirmRequest
-import io.github.chan808.authtemplate.member.presentation.ChangePasswordRequest
-import io.github.chan808.authtemplate.member.presentation.SignupRequest
+import io.github.chan808.authtemplate.user.presentation.ChangePasswordRequest
+import io.github.chan808.authtemplate.user.presentation.SignupRequest
 import jakarta.validation.Validation
 import org.junit.jupiter.api.Test
 import kotlin.test.assertFalse

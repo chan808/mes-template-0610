@@ -18,7 +18,7 @@ class JwtProviderTest {
     private val jwtProvider = JwtProvider(props)
 
     @Test
-    fun `access token contains member identity role and token version`() {
+    fun `access token contains user identity role and token version`() {
         val token = jwtProvider.generateAccessToken(1L, "USER", 3L)
         val claims = jwtProvider.validate(token)
 

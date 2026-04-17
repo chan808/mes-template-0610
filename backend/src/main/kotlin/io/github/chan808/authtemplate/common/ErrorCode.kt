@@ -22,7 +22,8 @@ enum class ErrorCode(
     OAUTH_CODE_NOT_FOUND(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 OAuth 코드입니다."),
 
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
-    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 회원입니다."),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."),
+    AVATAR_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 아바타입니다."),
     INVALID_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
     BREACHED_PASSWORD(HttpStatus.BAD_REQUEST, "이미 유출된 비밀번호입니다. 다른 비밀번호를 사용해 주세요."),
 

@@ -29,15 +29,15 @@ class DomainMetrics(
     fun recordEmailVerificationResend(outcome: String) =
         increment("auth.email.verification.resend", "outcome", outcome)
 
-    fun recordSignupSuccess() = increment("member.signup.total", "outcome", "success")
+    fun recordSignupSuccess() = increment("user.signup.total", "outcome", "success")
 
-    fun recordSignupFailure(reason: String) = increment("member.signup.total", "outcome", "failure", "reason", reason)
+    fun recordSignupFailure(reason: String) = increment("user.signup.total", "outcome", "failure", "reason", reason)
 
-    fun recordProfileUpdate() = increment("member.profile.updates")
+    fun recordProfileUpdate() = increment("user.profile.updates")
 
-    fun recordPasswordChange() = increment("member.password.changes")
+    fun recordPasswordChange() = increment("user.password.changes")
 
-    fun recordWithdrawal() = increment("member.withdrawals")
+    fun recordWithdrawal() = increment("user.withdrawals")
 
     fun recordSessionInvalidation(reason: String) =
         increment("auth.session.invalidations", "reason", reason)

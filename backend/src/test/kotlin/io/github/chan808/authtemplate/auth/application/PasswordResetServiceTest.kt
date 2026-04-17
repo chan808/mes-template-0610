@@ -7,8 +7,8 @@ import io.github.chan808.authtemplate.auth.application.port.PasswordResetTokenSt
 import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ErrorCode
 import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.member.api.AuthMemberView
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.AuthUserView
+import io.github.chan808.authtemplate.user.api.UserApi
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -20,13 +20,13 @@ import kotlin.test.assertEquals
 
 class PasswordResetServiceTest {
 
-    private val memberApi: MemberApi = mockk()
+    private val userApi: UserApi = mockk()
     private val passwordResetStore: PasswordResetTokenStore = mockk()
     private val mailSender: AuthMailSender = mockk()
     private val passwordResetRateLimitService: PasswordResetRateLimitService = mockk()
     private val domainMetrics: DomainMetrics = mockk(relaxed = true)
     private val service = PasswordResetService(
-        memberApi,
+        userApi,
         passwordResetStore,
         mailSender,
         passwordResetRateLimitService,
@@ -35,7 +35,7 @@ class PasswordResetServiceTest {
         "ko",
     )
 
-    private val localMember = AuthMemberView(
+    private val localUser = AuthUserView(
         id = 1L,
         email = "test@example.com",
         encodedPassword = "encoded-old-password",
@@ -45,12 +45,12 @@ class PasswordResetServiceTest {
         provider = null,
     )
 
-    private val oauthMember = localMember.copy(provider = "GOOGLE")
+    private val oauthUser = localUser.copy(provider = "GOOGLE")
 
     @Test
     fun `request reset stores token and sends email for local account`() {
         every { passwordResetRateLimitService.check(any(), any()) } just Runs
-        every { memberApi.findAuthMemberByEmail("test@example.com") } returns localMember
+        every { userApi.findAuthUserByEmail("test@example.com") } returns localUser
         every { passwordResetStore.save(any(), 1L) } just Runs
         every { mailSender.send(any(), any(), any()) } just Runs
 
@@ -70,7 +70,7 @@ class PasswordResetServiceTest {
     @Test
     fun `request reset on unknown email returns silently`() {
         every { passwordResetRateLimitService.check(any(), any()) } just Runs
-        every { memberApi.findAuthMemberByEmail(any()) } returns null
+        every { userApi.findAuthUserByEmail(any()) } returns null
 
         service.requestReset("unknown@example.com", "127.0.0.1")
 
@@ -82,7 +82,7 @@ class PasswordResetServiceTest {
     @Test
     fun `request reset on oauth account does not issue token`() {
         every { passwordResetRateLimitService.check(any(), any()) } just Runs
-        every { memberApi.findAuthMemberByEmail("oauth@example.com") } returns oauthMember.copy(email = "oauth@example.com")
+        every { userApi.findAuthUserByEmail("oauth@example.com") } returns oauthUser.copy(email = "oauth@example.com")
 
         service.requestReset("oauth@example.com", "127.0.0.1")
 
@@ -92,14 +92,14 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    fun `confirm reset consumes token and delegates to memberApi`() {
+    fun `confirm reset consumes token and delegates to userApi`() {
         every { passwordResetStore.consume("valid-token") } returns 1L
-        every { memberApi.resetPassword(1L, "new-password") } just Runs
+        every { userApi.resetPassword(1L, "new-password") } just Runs
 
         service.confirmReset("valid-token", "new-password")
 
         verify { passwordResetStore.consume("valid-token") }
-        verify { memberApi.resetPassword(1L, "new-password") }
+        verify { userApi.resetPassword(1L, "new-password") }
     }
 
     @Test

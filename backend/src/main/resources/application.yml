@@ -114,12 +114,12 @@ app:
     password:
       hibp:
         enabled: ${APP_SECURITY_PASSWORD_HIBP_ENABLED:true}
-  member:
+  user:
     cleanup:
       unverified:
-        enabled: ${UNVERIFIED_MEMBER_CLEANUP_ENABLED:true}
-        age-days: ${UNVERIFIED_MEMBER_CLEANUP_AGE_DAYS:7}
-        cron: ${UNVERIFIED_MEMBER_CLEANUP_CRON:0 0 3 * * *}
+        enabled: ${UNVERIFIED_USER_CLEANUP_ENABLED:true}
+        age-days: ${UNVERIFIED_USER_CLEANUP_AGE_DAYS:7}
+        cron: ${UNVERIFIED_USER_CLEANUP_CRON:0 0 3 * * *}
   name: ${APP_NAME:application}
 
 management:

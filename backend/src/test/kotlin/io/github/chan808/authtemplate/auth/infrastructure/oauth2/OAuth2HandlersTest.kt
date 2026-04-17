@@ -30,7 +30,7 @@ class OAuth2HandlersTest {
             rtExpiry = 604800,
         )
         val principal = object : AuthenticatedOAuth2User {
-            override val memberId: Long = 1L
+            override val userId: Long = 1L
             override val provider: String = "google"
         }
         val authentication: Authentication = mockk {

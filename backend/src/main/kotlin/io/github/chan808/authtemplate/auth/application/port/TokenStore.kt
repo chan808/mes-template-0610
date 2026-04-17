@@ -5,12 +5,12 @@ import io.github.chan808.authtemplate.auth.domain.RefreshTokenSession
 interface TokenStore {
     fun save(sid: String, session: RefreshTokenSession, ttlSeconds: Long)
     fun find(sid: String): RefreshTokenSession?
-    fun deleteSession(memberId: Long, sid: String)
+    fun deleteSession(userId: Long, sid: String)
     fun tryLock(sid: String): Boolean
     fun releaseLock(sid: String)
-    fun addSession(memberId: Long, sid: String)
-    fun deleteAllSessionsForMember(memberId: Long)
-    fun findAccessTokenVersion(memberId: Long): Long?
-    fun cacheAccessTokenVersion(memberId: Long, tokenVersion: Long)
-    fun deleteAccessTokenVersion(memberId: Long)
+    fun addSession(userId: Long, sid: String)
+    fun deleteAllSessionsForUser(userId: Long)
+    fun findAccessTokenVersion(userId: Long): Long?
+    fun cacheAccessTokenVersion(userId: Long, tokenVersion: Long)
+    fun deleteAccessTokenVersion(userId: Long)
 }

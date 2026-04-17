@@ -32,7 +32,7 @@ class OAuth2SuccessHandler(
         authentication: Authentication,
     ) {
         val oAuth2User = authentication.principal as AuthenticatedOAuth2User
-        val (accessToken, rawRt) = authService.issueTokensForOAuth(oAuth2User.memberId)
+        val (accessToken, rawRt) = authService.issueTokensForOAuth(oAuth2User.userId)
 
         // 나머지 엔드포인트와 동일하게 ResponseCookie로 SameSite=Strict를 직접 설정한다.
         val rtCookie = ResponseCookie.from("refresh_token", rawRt)
@@ -49,7 +49,7 @@ class OAuth2SuccessHandler(
 
         val locale = resolveLocale(request)
         val returnTo = resolveReturnTo(request)
-        log.info("[AUTH] OAuth2 login success memberId={} provider={} locale={}", oAuth2User.memberId, oAuth2User.provider, locale)
+        log.info("[AUTH] OAuth2 login success userId={} provider={} locale={}", oAuth2User.userId, oAuth2User.provider, locale)
         response.sendRedirect(
             UriComponentsBuilder.fromUriString("$frontendBaseUrl/$locale/auth/callback")
                 .queryParam("code", code)

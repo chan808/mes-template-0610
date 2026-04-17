@@ -1,7 +1,7 @@
 package io.github.chan808.authtemplate.auth.application
 
-import io.github.chan808.authtemplate.member.events.MemberWithdrawnEvent
-import io.github.chan808.authtemplate.member.events.PasswordChangedEvent
+import io.github.chan808.authtemplate.user.events.UserWithdrawnEvent
+import io.github.chan808.authtemplate.user.events.PasswordChangedEvent
 import org.junit.jupiter.api.Test
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
@@ -21,9 +21,9 @@ class AuthEventListenerTest {
     }
 
     @Test
-    fun `member withdrawn listener runs after commit`() {
+    fun `user withdrawn listener runs after commit`() {
         val annotation = AuthEventListener::class.java
-            .getDeclaredMethod("onMemberWithdrawn", MemberWithdrawnEvent::class.java)
+            .getDeclaredMethod("onUserWithdrawn", UserWithdrawnEvent::class.java)
             .getAnnotation(TransactionalEventListener::class.java)
 
         assertNotNull(annotation)

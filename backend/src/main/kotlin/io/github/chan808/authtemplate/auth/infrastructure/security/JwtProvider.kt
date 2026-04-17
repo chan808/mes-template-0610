@@ -16,10 +16,10 @@ class JwtProvider(private val props: JwtProperties) : AccessTokenPort {
         Keys.hmacShaKeyFor(props.secret.toByteArray(Charsets.UTF_8))
     }
 
-    override fun generateAccessToken(memberId: Long, role: String, tokenVersion: Long): String {
+    override fun generateAccessToken(userId: Long, role: String, tokenVersion: Long): String {
         val now = Date()
         return Jwts.builder()
-            .subject(memberId.toString())
+            .subject(userId.toString())
             .claim("role", role)
             .claim("tokenVersion", tokenVersion)
             .issuedAt(now)
@@ -35,5 +35,5 @@ class JwtProvider(private val props: JwtProperties) : AccessTokenPort {
             .parseSignedClaims(token)
             .payload
 
-    override fun getMemberId(token: String): Long = validate(token).subject.toLong()
+    override fun getUserId(token: String): Long = validate(token).subject.toLong()
 }

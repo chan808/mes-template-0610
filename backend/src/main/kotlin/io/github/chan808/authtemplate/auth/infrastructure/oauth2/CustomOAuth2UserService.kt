@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service
 /** 일반 OAuth2 흐름 (Naver, Kakao) 처리 */
 @Service
 class CustomOAuth2UserService(
-    private val memberOAuthService: MemberOAuthService,
+    private val userOAuthService: UserOAuthService,
 ) : DefaultOAuth2UserService() {
 
     private val log = LoggerFactory.getLogger(CustomOAuth2UserService::class.java)
@@ -19,10 +19,10 @@ class CustomOAuth2UserService(
         val registrationId = userRequest.clientRegistration.registrationId
         val userInfo = oAuth2UserInfoOf(registrationId, oAuth2User.attributes)
 
-        val member = memberOAuthService.findOrCreate(userInfo)
-        log.info("[AUTH] OAuth2 로그인 provider={} memberId={}", userInfo.provider, member.id)
+        val user = userOAuthService.findOrCreate(userInfo)
+        log.info("[AUTH] OAuth2 로그인 provider={} userId={}", userInfo.provider, user.id)
 
-        return CustomOAuth2User(oAuth2User, member.id, userInfo.provider)
+        return CustomOAuth2User(oAuth2User, user.id, userInfo.provider)
     }
 }
 

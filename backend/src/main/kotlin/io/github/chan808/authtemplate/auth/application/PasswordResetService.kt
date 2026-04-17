@@ -5,7 +5,7 @@ import io.github.chan808.authtemplate.auth.application.port.PasswordResetTokenSt
 import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ErrorCode
 import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.UserApi
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -14,7 +14,7 @@ import java.util.UUID
 
 @Service
 class PasswordResetService(
-    private val memberApi: MemberApi,
+    private val userApi: UserApi,
     private val passwordResetStore: PasswordResetTokenStore,
     private val mailSender: AuthMailSender,
     private val passwordResetRateLimitService: PasswordResetRateLimitService,
@@ -28,19 +28,19 @@ class PasswordResetService(
         val normalizedEmail = email.lowercase().trim()
         passwordResetRateLimitService.check(ip, normalizedEmail)
 
-        val member = memberApi.findAuthMemberByEmail(normalizedEmail) ?: run {
+        val user = userApi.findAuthUserByEmail(normalizedEmail) ?: run {
             domainMetrics.recordPasswordResetRequest("ignored_unknown_email")
             return
         }
 
-        if (member.isOAuthAccount) {
+        if (user.isOAuthAccount) {
             domainMetrics.recordPasswordResetRequest("ignored_oauth_account")
-            log.info("[AUTH] OAuth account password reset blocked memberId={}", member.id)
+            log.info("[AUTH] OAuth account password reset blocked userId={}", user.id)
             return
         }
 
         val token = UUID.randomUUID().toString()
-        passwordResetStore.save(token, member.id)
+        passwordResetStore.save(token, user.id)
 
         val resetLink = UriComponentsBuilder.fromUriString(baseUrl)
             .pathSegment(defaultLocale, "reset-password")
@@ -58,19 +58,19 @@ class PasswordResetService(
             |If you did not request this change, you can ignore this email.
         """.trimMargin()
 
-        mailSender.send(member.email, "Password reset", body)
+        mailSender.send(user.email, "Password reset", body)
         domainMetrics.recordPasswordResetRequest("issued")
-        log.info("[AUTH] Password reset mail sent memberId={}", member.id)
+        log.info("[AUTH] Password reset mail sent userId={}", user.id)
     }
 
     fun confirmReset(token: String, newPassword: String) {
-        val memberId = passwordResetStore.consume(token) ?: run {
+        val userId = passwordResetStore.consume(token) ?: run {
             domainMetrics.recordPasswordResetConfirmation("invalid_token")
             throw AuthException(ErrorCode.PASSWORD_RESET_TOKEN_INVALID)
         }
 
-        memberApi.resetPassword(memberId, newPassword)
+        userApi.resetPassword(userId, newPassword)
         domainMetrics.recordPasswordResetConfirmation("success")
-        log.info("[AUTH] Password reset completed memberId={}", memberId)
+        log.info("[AUTH] Password reset completed userId={}", userId)
     }
 }

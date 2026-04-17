@@ -2,8 +2,8 @@ package io.github.chan808.authtemplate.auth.application
 
 import io.github.chan808.authtemplate.auth.application.port.TokenStore
 import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.member.events.MemberWithdrawnEvent
-import io.github.chan808.authtemplate.member.events.PasswordChangedEvent
+import io.github.chan808.authtemplate.user.events.UserWithdrawnEvent
+import io.github.chan808.authtemplate.user.events.PasswordChangedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
@@ -19,17 +19,17 @@ class AuthEventListener(
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onPasswordChanged(event: PasswordChangedEvent) {
-        tokenStore.deleteAllSessionsForMember(event.memberId)
-        tokenStore.deleteAccessTokenVersion(event.memberId)
+        tokenStore.deleteAllSessionsForUser(event.userId)
+        tokenStore.deleteAccessTokenVersion(event.userId)
         domainMetrics.recordSessionInvalidation("password_changed")
-        log.info("[AUTH] invalidated all sessions after password change memberId={}", event.memberId)
+        log.info("[AUTH] invalidated all sessions after password change userId={}", event.userId)
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    fun onMemberWithdrawn(event: MemberWithdrawnEvent) {
-        tokenStore.deleteAllSessionsForMember(event.memberId)
-        tokenStore.deleteAccessTokenVersion(event.memberId)
-        domainMetrics.recordSessionInvalidation("member_withdrawn")
-        log.info("[AUTH] invalidated all sessions after member withdrawal memberId={}", event.memberId)
+    fun onUserWithdrawn(event: UserWithdrawnEvent) {
+        tokenStore.deleteAllSessionsForUser(event.userId)
+        tokenStore.deleteAccessTokenVersion(event.userId)
+        domainMetrics.recordSessionInvalidation("user_withdrawn")
+        log.info("[AUTH] invalidated all sessions after user withdrawal userId={}", event.userId)
     }
 }

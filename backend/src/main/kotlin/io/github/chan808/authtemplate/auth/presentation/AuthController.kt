@@ -7,7 +7,7 @@ import io.github.chan808.authtemplate.common.ApiResponse
 import io.github.chan808.authtemplate.common.AuthException
 import io.github.chan808.authtemplate.common.ClientIpResolver
 import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.member.api.MemberApi
+import io.github.chan808.authtemplate.user.api.UserApi
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.beans.factory.annotation.Value
@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/auth")
 class AuthController(
     private val authCommandService: AuthCommandService,
-    private val memberApi: MemberApi,
+    private val userApi: UserApi,
     private val passwordResetService: PasswordResetService,
     private val clientIpResolver: ClientIpResolver,
     private val oAuthCodeStore: OAuthCodeStore,
@@ -80,7 +80,7 @@ class AuthController(
 
     @PostMapping("/verify-email")
     fun verifyEmail(@RequestBody @Valid request: VerifyEmailRequest): ResponseEntity<ApiResponse<Unit>> {
-        memberApi.verifyEmail(request.token)
+        userApi.verifyEmail(request.token)
         return ResponseEntity.ok(ApiResponse.success())
     }
 
@@ -89,7 +89,7 @@ class AuthController(
         @RequestBody @Valid request: EmailVerificationResendRequest,
         servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<Unit>> {
-        memberApi.resendVerification(request.email, clientIpResolver.resolve(servletRequest))
+        userApi.resendVerification(request.email, clientIpResolver.resolve(servletRequest))
         return ResponseEntity.ok(ApiResponse.success("If the account exists and is not verified, a new verification email has been sent."))
     }
 
