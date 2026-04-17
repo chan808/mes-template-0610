@@ -3,6 +3,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import QueryProvider from "@/shared/components/QueryProvider";
+import { Toaster } from "sonner";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -28,7 +29,10 @@ export default async function LocaleLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <QueryProvider>{children}</QueryProvider>
+      <QueryProvider>
+          {children}
+          <Toaster position="top-right" richColors />
+        </QueryProvider>
     </NextIntlClientProvider>
   );
 }

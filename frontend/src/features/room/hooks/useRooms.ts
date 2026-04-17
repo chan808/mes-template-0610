@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { roomApi } from "../api/roomApi";
 import { CreateRoomRequest, UpdateRoomRequest } from "../types/room";
 
@@ -41,7 +42,9 @@ export function useCreateRoom() {
       roomApi.createRoom(data).then((res) => res.data.data!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roomKeys.list() });
+      toast.success("방이 생성되었습니다.");
     },
+    onError: () => toast.error("방 생성에 실패했습니다."),
   });
 }
 
@@ -53,7 +56,9 @@ export function useUpdateRoom(id: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roomKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: roomKeys.list() });
+      toast.success("방 설정이 저장되었습니다.");
     },
+    onError: () => toast.error("방 설정 변경에 실패했습니다."),
   });
 }
 
@@ -63,7 +68,9 @@ export function useDeleteRoom() {
     mutationFn: (id: number) => roomApi.deleteRoom(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roomKeys.list() });
+      toast.success("방이 삭제되었습니다.");
     },
+    onError: () => toast.error("방 삭제에 실패했습니다."),
   });
 }
 
@@ -74,6 +81,8 @@ export function useRegenerateInviteToken(id: number) {
       roomApi.regenerateInviteToken(id).then((res) => res.data.data!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: roomKeys.detail(id) });
+      toast.success("초대 링크가 재생성되었습니다. 기존 링크는 즉시 무효화됩니다.");
     },
+    onError: () => toast.error("초대 링크 재생성에 실패했습니다."),
   });
 }

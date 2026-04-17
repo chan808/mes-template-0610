@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { messageApi } from "../api/messageApi";
+import { toast } from "sonner";
+import { messageApi, HistoryMessage } from "../api/messageApi";
 import { useChatStore } from "../stores/chatStore";
 import { DisplayMessage } from "../types/ws";
 
-function toDisplayMessages(messages: Awaited<ReturnType<typeof messageApi.getMessages>>["data"]["data"]): DisplayMessage[] {
-  return (messages?.messages ?? []).map((m) => ({
+function toDisplayMessages(messages: HistoryMessage[]): DisplayMessage[] {
+  return messages.map((m) => ({
     id: String(m.id),
     type: m.type,
     userId: m.userId ?? 0,
@@ -20,20 +21,19 @@ export function useMessageHistory(roomId: number) {
   const { prependHistory, hasMore, oldestCursor } = useChatStore();
   const [isFetching, setIsFetching] = useState(false);
 
-  // 초기 히스토리 로드
   useEffect(() => {
     messageApi
       .getMessages(roomId)
       .then((res) => {
         const result = res.data.data!;
-        const messages = toDisplayMessages(res.data.data);
+        const messages = toDisplayMessages(result.messages);
         // DESC 정렬이므로 마지막 요소가 가장 오래된 메시지 → cursor로 사용
         const cursor = result.messages.length > 0
           ? result.messages[result.messages.length - 1].id
           : null;
         prependHistory(messages, result.hasMore, cursor);
       })
-      .catch(() => {});
+      .catch(() => toast.error("채팅 기록을 불러오지 못했습니다."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -44,13 +44,13 @@ export function useMessageHistory(roomId: number) {
       .getMessages(roomId, { before: oldestCursor })
       .then((res) => {
         const result = res.data.data!;
-        const messages = toDisplayMessages(res.data.data);
+        const messages = toDisplayMessages(result.messages);
         const cursor = result.messages.length > 0
           ? result.messages[result.messages.length - 1].id
           : null;
         prependHistory(messages, result.hasMore, cursor);
       })
-      .catch(() => {})
+      .catch(() => toast.error("이전 메시지를 불러오지 못했습니다."))
       .finally(() => setIsFetching(false));
   }
 

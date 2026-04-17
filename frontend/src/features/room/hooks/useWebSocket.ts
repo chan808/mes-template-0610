@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { useAuthStore } from "@/features/auth/stores/authStore";
 import { useWsStore } from "../stores/wsStore";
 import { usePresenceStore } from "../stores/presenceStore";
@@ -19,7 +20,7 @@ export function useWebSocket(roomId: number) {
   const unmountedRef = useRef(false);
 
   const { setStatus, setWs, reset } = useWsStore();
-  const { upsertPresence, removePresence, clear: clearPresence } = usePresenceStore();
+  const { upsertPresence, removePresence, cacheNickname, getNickname, clear: clearPresence } = usePresenceStore();
   const { appendMessage, clear: clearChat } = useChatStore();
 
   const handleMessage = useCallback(
@@ -47,14 +48,16 @@ export function useWebSocket(roomId: number) {
             id: String(msg.messageId),
             type: "chat",
             userId: msg.userId,
-            // nickname은 presence에서 조회 (WS chat 이벤트에 nickname이 없으므로)
-            nickname: usePresenceStore.getState().presences.get(msg.userId)?.nickname ?? "알 수 없음",
+            // nicknameCache에서 조회 — presence 제거 후에도 닉네임 유지
+            nickname: getNickname(msg.userId),
             content: msg.content,
             createdAt: msg.createdAt,
           });
           break;
 
         case "join":
+          // 입장 시 닉네임 캐시에 저장
+          cacheNickname(msg.userId, msg.nickname);
           appendMessage({
             id: `join-${msg.userId}-${Date.now()}`,
             type: "system",
@@ -63,22 +66,24 @@ export function useWebSocket(roomId: number) {
           });
           break;
 
-        case "leave":
+        case "leave": {
+          const nickname = getNickname(msg.userId);
           appendMessage({
             id: `leave-${msg.userId}-${Date.now()}`,
             type: "system",
-            content: `${usePresenceStore.getState().presences.get(msg.userId)?.nickname ?? "누군가"}님이 퇴장했습니다.`,
+            content: `${nickname}님이 퇴장했습니다.`,
             createdAt: new Date().toISOString(),
           });
           removePresence(msg.userId);
           break;
+        }
 
         case "error":
-          console.error(`[WS] 서버 에러: ${msg.code} - ${msg.message}`);
+          toast.error(`서버 오류: ${msg.message}`);
           break;
       }
     },
-    [upsertPresence, removePresence, appendMessage],
+    [upsertPresence, removePresence, cacheNickname, getNickname, appendMessage],
   );
 
   const startPing = useCallback((ws: WebSocket) => {
@@ -100,7 +105,10 @@ export function useWebSocket(roomId: number) {
     if (unmountedRef.current) return;
 
     const token = useAuthStore.getState().accessToken;
-    if (!token) return;
+    if (!token) {
+      toast.error("인증 정보가 없습니다. 다시 로그인해주세요.");
+      return;
+    }
 
     setStatus("connecting");
     const ws = new WebSocket(`${WS_BASE_URL}/ws/rooms/${roomId}?token=${token}`);
@@ -130,9 +138,12 @@ export function useWebSocket(roomId: number) {
       setStatus("disconnected");
       setWs(null);
 
-      // 지수 백오프 재연결
       const delay = RECONNECT_DELAYS[Math.min(retryCountRef.current, RECONNECT_DELAYS.length - 1)];
       retryCountRef.current += 1;
+
+      if (retryCountRef.current === 1) {
+        toast.warning("연결이 끊겼습니다. 재연결 중...");
+      }
       reconnectTimerRef.current = setTimeout(connect, delay);
     };
   }, [roomId, handleMessage, startPing, stopPing, setStatus, setWs]);
