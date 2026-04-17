@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.room.infrastructure.persistence
+package io.github.chan808.agolive.room.infrastructure.persistence
 
-import io.github.chan808.authtemplate.room.domain.Room
+import io.github.chan808.agolive.room.domain.Room
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository

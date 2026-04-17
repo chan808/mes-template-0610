@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.infrastructure.security
+package io.github.chan808.agolive.auth.infrastructure.security
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

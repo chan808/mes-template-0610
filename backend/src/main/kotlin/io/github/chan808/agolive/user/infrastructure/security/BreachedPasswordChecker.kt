@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.user.infrastructure.security
+package io.github.chan808.agolive.user.infrastructure.security
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.UserException
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.UserException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.JdkClientHttpRequestFactory

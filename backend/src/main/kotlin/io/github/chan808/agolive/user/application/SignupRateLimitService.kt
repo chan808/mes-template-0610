@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.common.RateLimitException
-import io.github.chan808.authtemplate.common.ratelimit.RateLimiter
+import io.github.chan808.agolive.common.RateLimitException
+import io.github.chan808.agolive.common.ratelimit.RateLimiter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

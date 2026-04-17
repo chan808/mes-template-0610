@@ -1,14 +1,13 @@
-package io.github.chan808.authtemplate.auth.application
+package io.github.chan808.agolive.auth.application
 
-import io.github.chan808.authtemplate.auth.application.PasswordResetRateLimitService
-import io.github.chan808.authtemplate.auth.application.PasswordResetService
-import io.github.chan808.authtemplate.auth.application.port.AuthMailSender
-import io.github.chan808.authtemplate.auth.application.port.PasswordResetTokenStore
-import io.github.chan808.authtemplate.common.AuthException
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.api.AuthUserView
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.auth.application.PasswordResetService
+import io.github.chan808.agolive.auth.application.port.AuthMailSender
+import io.github.chan808.agolive.auth.application.port.PasswordResetTokenStore
+import io.github.chan808.agolive.common.AuthException
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.api.AuthUserView
+import io.github.chan808.agolive.user.api.UserApi
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just

@@ -1,5 +1,5 @@
 @file:Suppress("unused")
-package io.github.chan808.authtemplate.room
+package io.github.chan808.agolive.room
 
 import org.springframework.modulith.ApplicationModule
 

@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.common.security
+package io.github.chan808.agolive.common.security
 
-import io.github.chan808.authtemplate.auth.infrastructure.security.JwtProperties
-import io.github.chan808.authtemplate.auth.infrastructure.security.JwtProvider
+import io.github.chan808.agolive.auth.infrastructure.security.JwtProperties
+import io.github.chan808.agolive.auth.infrastructure.security.JwtProvider
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import org.junit.jupiter.api.Test

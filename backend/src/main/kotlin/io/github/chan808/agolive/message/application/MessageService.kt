@@ -1,15 +1,15 @@
-package io.github.chan808.authtemplate.message.application
+package io.github.chan808.agolive.message.application
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.RoomException
-import io.github.chan808.authtemplate.message.api.MessageApi
-import io.github.chan808.authtemplate.message.api.MessageRecord
-import io.github.chan808.authtemplate.message.api.MessageType
-import io.github.chan808.authtemplate.message.domain.Message
-import io.github.chan808.authtemplate.message.infrastructure.persistence.MessageRepository
-import io.github.chan808.authtemplate.message.presentation.MessageCursorResponse
-import io.github.chan808.authtemplate.message.presentation.MessageResponse
-import io.github.chan808.authtemplate.room.api.RoomApi
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.RoomException
+import io.github.chan808.agolive.message.api.MessageApi
+import io.github.chan808.agolive.message.api.MessageRecord
+import io.github.chan808.agolive.message.api.MessageType
+import io.github.chan808.agolive.message.domain.Message
+import io.github.chan808.agolive.message.infrastructure.persistence.MessageRepository
+import io.github.chan808.agolive.message.presentation.MessageCursorResponse
+import io.github.chan808.agolive.message.presentation.MessageResponse
+import io.github.chan808.agolive.room.api.RoomApi
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

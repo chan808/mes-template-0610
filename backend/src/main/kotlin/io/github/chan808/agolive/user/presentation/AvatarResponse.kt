@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.user.presentation
+package io.github.chan808.agolive.user.presentation
 
 data class AvatarResponse(
     val id: Long,

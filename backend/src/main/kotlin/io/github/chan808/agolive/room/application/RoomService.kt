@@ -1,14 +1,14 @@
-package io.github.chan808.authtemplate.room.application
+package io.github.chan808.agolive.room.application
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.RoomException
-import io.github.chan808.authtemplate.room.api.RoomApi
-import io.github.chan808.authtemplate.room.domain.Room
-import io.github.chan808.authtemplate.room.infrastructure.persistence.RoomRepository
-import io.github.chan808.authtemplate.room.presentation.CreateRoomRequest
-import io.github.chan808.authtemplate.room.presentation.InviteTokenResponse
-import io.github.chan808.authtemplate.room.presentation.RoomResponse
-import io.github.chan808.authtemplate.room.presentation.UpdateRoomRequest
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.RoomException
+import io.github.chan808.agolive.room.api.RoomApi
+import io.github.chan808.agolive.room.domain.Room
+import io.github.chan808.agolive.room.infrastructure.persistence.RoomRepository
+import io.github.chan808.agolive.room.presentation.CreateRoomRequest
+import io.github.chan808.agolive.room.presentation.InviteTokenResponse
+import io.github.chan808.agolive.room.presentation.RoomResponse
+import io.github.chan808.agolive.room.presentation.UpdateRoomRequest
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable

@@ -1,6 +1,5 @@
-package io.github.chan808.authtemplate.common.ratelimit
+package io.github.chan808.agolive.common.ratelimit
 
-import io.github.chan808.authtemplate.common.ratelimit.RateLimiter
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.message.presentation
+package io.github.chan808.agolive.message.presentation
 
-import io.github.chan808.authtemplate.message.api.MessageType
-import io.github.chan808.authtemplate.message.domain.Message
+import io.github.chan808.agolive.message.api.MessageType
+import io.github.chan808.agolive.message.domain.Message
 import java.time.OffsetDateTime
 
 data class MessageResponse(

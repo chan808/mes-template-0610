@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 import org.springframework.http.HttpStatus
 

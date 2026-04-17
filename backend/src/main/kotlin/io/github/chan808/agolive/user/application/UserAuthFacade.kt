@@ -1,14 +1,14 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.common.AuthException
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.api.AuthUserView
-import io.github.chan808.authtemplate.user.api.UserApi
-import io.github.chan808.authtemplate.user.domain.User
-import io.github.chan808.authtemplate.user.events.PasswordChangedEvent
-import io.github.chan808.authtemplate.user.infrastructure.persistence.UserRepository
-import io.github.chan808.authtemplate.user.infrastructure.security.BreachedPasswordChecker
+import io.github.chan808.agolive.common.AuthException
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.api.AuthUserView
+import io.github.chan808.agolive.user.api.UserApi
+import io.github.chan808.agolive.user.domain.User
+import io.github.chan808.agolive.user.events.PasswordChangedEvent
+import io.github.chan808.agolive.user.infrastructure.persistence.UserRepository
+import io.github.chan808.agolive.user.infrastructure.security.BreachedPasswordChecker
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.crypto.password.PasswordEncoder

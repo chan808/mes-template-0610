@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.user.infrastructure.mail
+package io.github.chan808.agolive.user.infrastructure.mail
 
-import io.github.chan808.authtemplate.user.application.port.MailSender
+import io.github.chan808.agolive.user.application.port.MailSender
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.mail.javamail.JavaMailSender

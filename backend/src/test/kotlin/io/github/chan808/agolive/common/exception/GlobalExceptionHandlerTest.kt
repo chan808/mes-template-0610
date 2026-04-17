@@ -1,8 +1,8 @@
-package io.github.chan808.authtemplate.common.exception
+package io.github.chan808.agolive.common.exception
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.UserException
-import io.github.chan808.authtemplate.common.config.GlobalExceptionHandler
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.UserException
+import io.github.chan808.agolive.common.config.GlobalExceptionHandler
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest

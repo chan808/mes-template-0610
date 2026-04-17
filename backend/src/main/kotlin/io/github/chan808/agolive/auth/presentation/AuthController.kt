@@ -1,13 +1,13 @@
-package io.github.chan808.authtemplate.auth.presentation
+package io.github.chan808.agolive.auth.presentation
 
-import io.github.chan808.authtemplate.auth.application.AuthCommandService
-import io.github.chan808.authtemplate.auth.application.PasswordResetService
-import io.github.chan808.authtemplate.auth.infrastructure.redis.OAuthCodeStore
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.common.AuthException
-import io.github.chan808.authtemplate.common.ClientIpResolver
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.auth.application.AuthCommandService
+import io.github.chan808.agolive.auth.application.PasswordResetService
+import io.github.chan808.agolive.auth.infrastructure.redis.OAuthCodeStore
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.common.AuthException
+import io.github.chan808.agolive.common.ClientIpResolver
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.user.api.UserApi
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.beans.factory.annotation.Value

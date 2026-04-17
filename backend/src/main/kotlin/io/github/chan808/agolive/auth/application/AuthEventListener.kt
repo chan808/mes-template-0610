@@ -1,9 +1,9 @@
-package io.github.chan808.authtemplate.auth.application
+package io.github.chan808.agolive.auth.application
 
-import io.github.chan808.authtemplate.auth.application.port.TokenStore
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.events.UserWithdrawnEvent
-import io.github.chan808.authtemplate.user.events.PasswordChangedEvent
+import io.github.chan808.agolive.auth.application.port.TokenStore
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.events.UserWithdrawnEvent
+import io.github.chan808.agolive.user.events.PasswordChangedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase

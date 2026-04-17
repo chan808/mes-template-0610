@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.auth.application
+package io.github.chan808.agolive.auth.application
 
-import io.github.chan808.authtemplate.auth.application.port.AccessTokenPort
+import io.github.chan808.agolive.auth.application.port.AccessTokenPort
 import io.jsonwebtoken.JwtException
 import org.springframework.stereotype.Service
 

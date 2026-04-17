@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.message.domain
+package io.github.chan808.agolive.message.domain
 
-import io.github.chan808.authtemplate.message.api.MessageType
+import io.github.chan808.agolive.message.api.MessageType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners

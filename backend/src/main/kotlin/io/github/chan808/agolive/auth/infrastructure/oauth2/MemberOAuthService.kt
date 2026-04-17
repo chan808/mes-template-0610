@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.auth.infrastructure.oauth2
+package io.github.chan808.agolive.auth.infrastructure.oauth2
 
-import io.github.chan808.authtemplate.user.api.AuthUserView
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.user.api.AuthUserView
+import io.github.chan808.agolive.user.api.UserApi
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

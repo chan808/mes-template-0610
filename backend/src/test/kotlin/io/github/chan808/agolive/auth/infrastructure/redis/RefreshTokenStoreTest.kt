@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.auth.infrastructure.redis
+package io.github.chan808.agolive.auth.infrastructure.redis
 
-import io.github.chan808.authtemplate.auth.domain.RefreshTokenSession
-import io.github.chan808.authtemplate.auth.infrastructure.redis.RefreshTokenStore
+import io.github.chan808.agolive.auth.domain.RefreshTokenSession
+import io.github.chan808.agolive.auth.infrastructure.redis.RefreshTokenStore
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag

@@ -1,8 +1,8 @@
-package io.github.chan808.authtemplate.auth.infrastructure.security
+package io.github.chan808.agolive.auth.infrastructure.security
 
-import io.github.chan808.authtemplate.auth.application.port.TokenStore
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.auth.application.port.TokenStore
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.user.api.UserApi
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import jakarta.servlet.FilterChain

@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.boot.context.properties.ConfigurationProperties

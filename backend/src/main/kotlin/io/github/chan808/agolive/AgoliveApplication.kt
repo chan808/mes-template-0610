@@ -8,8 +8,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-class agoliveApplication
+class AgoliveApplication
 
 fun main(args: Array<String>) {
-	runApplication<agoliveApplication>(*args)
+	runApplication<AgoliveApplication>(*args)
 }

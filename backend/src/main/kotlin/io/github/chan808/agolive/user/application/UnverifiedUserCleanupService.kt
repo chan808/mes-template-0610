@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.user.infrastructure.persistence.UserRepository
-import io.github.chan808.authtemplate.user.infrastructure.redis.EmailVerificationStore
+import io.github.chan808.agolive.user.infrastructure.persistence.UserRepository
+import io.github.chan808.agolive.user.infrastructure.redis.EmailVerificationStore
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

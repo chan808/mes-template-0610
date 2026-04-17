@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common.config
+package io.github.chan808.agolive.common.config
 
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.annotation.Value

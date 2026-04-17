@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.room.presentation
+package io.github.chan808.agolive.room.presentation
 
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min

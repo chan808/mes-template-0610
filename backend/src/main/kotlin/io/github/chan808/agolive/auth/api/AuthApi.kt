@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.api
+package io.github.chan808.agolive.auth.api
 
 /**
  * auth 모듈의 공개 API.

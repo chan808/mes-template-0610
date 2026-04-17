@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.user.api
+package io.github.chan808.agolive.user.api
 
 data class AuthUserView(
     val id: Long,

@@ -1,12 +1,12 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.UserException
-import io.github.chan808.authtemplate.common.maskEmail
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.domain.event.UserRegisteredEvent
-import io.github.chan808.authtemplate.user.infrastructure.persistence.UserRepository
-import io.github.chan808.authtemplate.user.infrastructure.redis.EmailVerificationStore
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.UserException
+import io.github.chan808.agolive.common.maskEmail
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.domain.event.UserRegisteredEvent
+import io.github.chan808.agolive.user.infrastructure.persistence.UserRepository
+import io.github.chan808.agolive.user.infrastructure.redis.EmailVerificationStore
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service

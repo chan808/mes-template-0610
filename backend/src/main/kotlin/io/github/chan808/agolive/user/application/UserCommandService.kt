@@ -1,18 +1,17 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.UserException
-import io.github.chan808.authtemplate.common.maskEmail
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.domain.User
-import io.github.chan808.authtemplate.user.events.UserWithdrawnEvent
-import io.github.chan808.authtemplate.user.infrastructure.persistence.AvatarTemplateRepository
-import io.github.chan808.authtemplate.user.infrastructure.persistence.UserRepository
-import io.github.chan808.authtemplate.user.infrastructure.security.BreachedPasswordChecker
-import io.github.chan808.authtemplate.user.presentation.ChangePasswordRequest
-import io.github.chan808.authtemplate.user.presentation.SignupRequest
-import io.github.chan808.authtemplate.user.presentation.UpdateProfileRequest
-import io.github.chan808.authtemplate.user.presentation.UserProfileResponse
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.UserException
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.domain.User
+import io.github.chan808.agolive.user.events.UserWithdrawnEvent
+import io.github.chan808.agolive.user.infrastructure.persistence.AvatarTemplateRepository
+import io.github.chan808.agolive.user.infrastructure.persistence.UserRepository
+import io.github.chan808.agolive.user.infrastructure.security.BreachedPasswordChecker
+import io.github.chan808.agolive.user.presentation.ChangePasswordRequest
+import io.github.chan808.agolive.user.presentation.SignupRequest
+import io.github.chan808.agolive.user.presentation.UpdateProfileRequest
+import io.github.chan808.agolive.user.presentation.UserProfileResponse
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -80,7 +79,7 @@ class UserCommandService(
         breachedPasswordChecker.check(request.newPassword, user.email)
         user.changePassword(passwordEncoder.encode(request.newPassword) ?: error("PasswordEncoder returned null"))
         user.incrementTokenVersion()
-        eventPublisher.publishEvent(io.github.chan808.authtemplate.user.events.PasswordChangedEvent(userId))
+        eventPublisher.publishEvent(io.github.chan808.agolive.user.events.PasswordChangedEvent(userId))
         domainMetrics.recordPasswordChange()
         log.info("[AUTH] password changed userId={}", userId)
     }

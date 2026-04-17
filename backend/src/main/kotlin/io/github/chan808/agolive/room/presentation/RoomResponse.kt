@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.room.presentation
+package io.github.chan808.agolive.room.presentation
 
-import io.github.chan808.authtemplate.room.domain.Room
-import io.github.chan808.authtemplate.room.domain.RoomStatus
+import io.github.chan808.agolive.room.domain.Room
+import io.github.chan808.agolive.room.domain.RoomStatus
 import java.time.OffsetDateTime
 import java.util.UUID
 

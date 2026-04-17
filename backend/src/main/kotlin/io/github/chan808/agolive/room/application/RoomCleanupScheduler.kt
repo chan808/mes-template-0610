@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.room.application
+package io.github.chan808.agolive.room.application
 
-import io.github.chan808.authtemplate.room.infrastructure.persistence.RoomRepository
+import io.github.chan808.agolive.room.infrastructure.persistence.RoomRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component

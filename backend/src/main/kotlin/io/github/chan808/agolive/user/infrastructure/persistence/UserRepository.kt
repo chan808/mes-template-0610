@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.user.infrastructure.persistence
+package io.github.chan808.agolive.user.infrastructure.persistence
 
-import io.github.chan808.authtemplate.user.domain.User
+import io.github.chan808.agolive.user.domain.User
 import org.springframework.data.jpa.repository.JpaRepository
 import java.time.OffsetDateTime
 

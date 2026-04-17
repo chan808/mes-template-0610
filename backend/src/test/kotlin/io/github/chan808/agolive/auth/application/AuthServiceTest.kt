@@ -1,16 +1,15 @@
-package io.github.chan808.authtemplate.auth.application
+package io.github.chan808.agolive.auth.application
 
-import io.github.chan808.authtemplate.auth.application.AuthCommandService
-import io.github.chan808.authtemplate.auth.application.LoginRateLimitService
-import io.github.chan808.authtemplate.auth.application.port.AccessTokenPort
-import io.github.chan808.authtemplate.auth.application.port.TokenStore
-import io.github.chan808.authtemplate.auth.domain.RefreshTokenSession
-import io.github.chan808.authtemplate.auth.presentation.LoginRequest
-import io.github.chan808.authtemplate.common.AuthException
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.metrics.DomainMetrics
-import io.github.chan808.authtemplate.user.api.AuthUserView
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.auth.application.AuthCommandService
+import io.github.chan808.agolive.auth.application.port.AccessTokenPort
+import io.github.chan808.agolive.auth.application.port.TokenStore
+import io.github.chan808.agolive.auth.domain.RefreshTokenSession
+import io.github.chan808.agolive.auth.presentation.LoginRequest
+import io.github.chan808.agolive.common.AuthException
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.metrics.DomainMetrics
+import io.github.chan808.agolive.user.api.AuthUserView
+import io.github.chan808.agolive.user.api.UserApi
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just

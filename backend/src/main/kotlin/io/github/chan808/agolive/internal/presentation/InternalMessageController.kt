@@ -1,9 +1,9 @@
-package io.github.chan808.authtemplate.internal.presentation
+package io.github.chan808.agolive.internal.presentation
 
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.message.api.MessageApi
-import io.github.chan808.authtemplate.message.api.MessageRecord
-import io.github.chan808.authtemplate.message.api.MessageType
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.message.api.MessageApi
+import io.github.chan808.agolive.message.api.MessageRecord
+import io.github.chan808.agolive.message.api.MessageType
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size

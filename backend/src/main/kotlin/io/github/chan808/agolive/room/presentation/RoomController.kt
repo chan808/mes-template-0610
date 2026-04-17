@@ -1,8 +1,8 @@
-package io.github.chan808.authtemplate.room.presentation
+package io.github.chan808.agolive.room.presentation
 
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.common.PageResponse
-import io.github.chan808.authtemplate.room.application.RoomService
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.common.PageResponse
+import io.github.chan808.agolive.room.application.RoomService
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault

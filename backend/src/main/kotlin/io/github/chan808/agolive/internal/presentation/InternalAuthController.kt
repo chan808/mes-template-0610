@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.internal.presentation
+package io.github.chan808.agolive.internal.presentation
 
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.user.api.UserApi
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.PostMapping

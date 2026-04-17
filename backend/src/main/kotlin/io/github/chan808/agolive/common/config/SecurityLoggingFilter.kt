@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.common.config
+package io.github.chan808.agolive.common.config
 
-import io.github.chan808.authtemplate.common.ClientIpResolver
+import io.github.chan808.agolive.common.ClientIpResolver
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse

@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.message.presentation
+package io.github.chan808.agolive.message.presentation
 
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.message.application.MessageService
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.message.application.MessageService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable

@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.user.domain
+package io.github.chan808.agolive.user.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

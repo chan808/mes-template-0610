@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 // 성공/실패 역직렬화 스키마 분리: 실패는 ProblemDetail(RFC 7807)로 처리
 data class ApiResponse<T>(

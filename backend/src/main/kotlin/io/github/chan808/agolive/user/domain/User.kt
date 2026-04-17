@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.user.domain
+package io.github.chan808.agolive.user.domain
 
-import io.github.chan808.authtemplate.common.BaseEntity
+import io.github.chan808.agolive.common.BaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -10,7 +10,6 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
 
 @Entity
 @Table(name = "users")

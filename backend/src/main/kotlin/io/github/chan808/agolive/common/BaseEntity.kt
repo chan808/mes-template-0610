@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 import jakarta.persistence.Column
 import jakarta.persistence.EntityListeners

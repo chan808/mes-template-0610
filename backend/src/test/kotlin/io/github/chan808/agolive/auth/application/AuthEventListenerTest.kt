@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.auth.application
+package io.github.chan808.agolive.auth.application
 
-import io.github.chan808.authtemplate.user.events.UserWithdrawnEvent
-import io.github.chan808.authtemplate.user.events.PasswordChangedEvent
+import io.github.chan808.agolive.user.events.UserWithdrawnEvent
+import io.github.chan808.agolive.user.events.PasswordChangedEvent
 import org.junit.jupiter.api.Test
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener

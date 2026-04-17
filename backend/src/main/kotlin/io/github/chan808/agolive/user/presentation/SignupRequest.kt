@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.user.presentation
+package io.github.chan808.agolive.user.presentation
 
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank

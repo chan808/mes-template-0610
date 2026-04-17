@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.auth.infrastructure.security
+package io.github.chan808.agolive.auth.infrastructure.security
 
-import io.github.chan808.authtemplate.common.ErrorCode
+import io.github.chan808.agolive.common.ErrorCode
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.access.AccessDeniedException

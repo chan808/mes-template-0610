@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.infrastructure.oauth2
+package io.github.chan808.agolive.auth.infrastructure.oauth2
 
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 

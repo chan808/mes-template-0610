@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.message.infrastructure.persistence
+package io.github.chan808.agolive.message.infrastructure.persistence
 
-import io.github.chan808.authtemplate.message.domain.Message
+import io.github.chan808.agolive.message.domain.Message
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface MessageRepository : JpaRepository<Message, Long> {

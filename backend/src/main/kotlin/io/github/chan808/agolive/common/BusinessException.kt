@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 // RuntimeException 상속으로 트랜잭션 롤백 대상 포함, 도메인별 서브클래스로 핸들러 분기 확보
 open class BusinessException(

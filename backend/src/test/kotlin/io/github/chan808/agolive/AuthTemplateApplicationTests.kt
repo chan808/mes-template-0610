@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate
+package io.github.chan808.agolive
 
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers
 @Tag("integration")
 @SpringBootTest
 @Testcontainers
-class AuthTemplateApplicationTests {
+class agoliveApplicationTests {
 
     companion object {
         @Container

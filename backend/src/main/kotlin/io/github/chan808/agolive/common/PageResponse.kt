@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common
+package io.github.chan808.agolive.common
 
 import io.swagger.v3.oas.annotations.media.Schema
 import org.springframework.data.domain.Page

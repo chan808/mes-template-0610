@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common.metrics
+package io.github.chan808.agolive.common.metrics
 
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.stereotype.Component

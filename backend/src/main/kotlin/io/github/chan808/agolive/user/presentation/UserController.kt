@@ -1,9 +1,9 @@
-package io.github.chan808.authtemplate.user.presentation
+package io.github.chan808.agolive.user.presentation
 
-import io.github.chan808.authtemplate.common.ApiResponse
-import io.github.chan808.authtemplate.common.ClientIpResolver
-import io.github.chan808.authtemplate.user.application.UserCommandService
-import io.github.chan808.authtemplate.user.infrastructure.persistence.AvatarTemplateRepository
+import io.github.chan808.agolive.common.ApiResponse
+import io.github.chan808.agolive.common.ClientIpResolver
+import io.github.chan808.agolive.user.application.UserCommandService
+import io.github.chan808.agolive.user.infrastructure.persistence.AvatarTemplateRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid

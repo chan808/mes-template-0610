@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
-import io.github.chan808.authtemplate.user.application.port.MailSender
-import io.github.chan808.authtemplate.user.domain.event.UserRegisteredEvent
+import io.github.chan808.agolive.user.application.port.MailSender
+import io.github.chan808.agolive.user.domain.event.UserRegisteredEvent
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase

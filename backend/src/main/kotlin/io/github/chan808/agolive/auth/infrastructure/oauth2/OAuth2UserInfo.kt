@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.infrastructure.oauth2
+package io.github.chan808.agolive.auth.infrastructure.oauth2
 
 /**
  * 각 OAuth 제공자의 userInfo 응답 구조가 다르므로 추상화

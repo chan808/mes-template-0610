@@ -1,12 +1,12 @@
-package io.github.chan808.authtemplate.auth.infrastructure.security
+package io.github.chan808.agolive.auth.infrastructure.security
 
-import io.github.chan808.authtemplate.auth.application.port.TokenStore
-import io.github.chan808.authtemplate.auth.infrastructure.oauth2.CustomOAuth2UserService
-import io.github.chan808.authtemplate.auth.infrastructure.oauth2.CustomOidcUserService
-import io.github.chan808.authtemplate.auth.infrastructure.oauth2.LocaleAwareOAuth2AuthorizationRequestResolver
-import io.github.chan808.authtemplate.auth.infrastructure.oauth2.OAuth2FailureHandler
-import io.github.chan808.authtemplate.auth.infrastructure.oauth2.OAuth2SuccessHandler
-import io.github.chan808.authtemplate.user.api.UserApi
+import io.github.chan808.agolive.auth.application.port.TokenStore
+import io.github.chan808.agolive.auth.infrastructure.oauth2.CustomOAuth2UserService
+import io.github.chan808.agolive.auth.infrastructure.oauth2.CustomOidcUserService
+import io.github.chan808.agolive.auth.infrastructure.oauth2.LocaleAwareOAuth2AuthorizationRequestResolver
+import io.github.chan808.agolive.auth.infrastructure.oauth2.OAuth2FailureHandler
+import io.github.chan808.agolive.auth.infrastructure.oauth2.OAuth2SuccessHandler
+import io.github.chan808.agolive.user.api.UserApi
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean

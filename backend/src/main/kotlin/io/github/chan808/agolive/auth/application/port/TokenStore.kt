@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.auth.application.port
+package io.github.chan808.agolive.auth.application.port
 
-import io.github.chan808.authtemplate.auth.domain.RefreshTokenSession
+import io.github.chan808.agolive.auth.domain.RefreshTokenSession
 
 interface TokenStore {
     fun save(sid: String, session: RefreshTokenSession, ttlSeconds: Long)

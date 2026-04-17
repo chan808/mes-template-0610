@@ -1,8 +1,8 @@
-package io.github.chan808.authtemplate.common.config
+package io.github.chan808.agolive.common.config
 
-import io.github.chan808.authtemplate.common.BusinessException
-import io.github.chan808.authtemplate.common.ErrorCode
-import io.github.chan808.authtemplate.common.RateLimitException
+import io.github.chan808.agolive.common.BusinessException
+import io.github.chan808.agolive.common.ErrorCode
+import io.github.chan808.agolive.common.RateLimitException
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatusCode

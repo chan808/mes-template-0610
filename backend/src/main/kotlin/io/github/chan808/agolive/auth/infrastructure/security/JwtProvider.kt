@@ -1,6 +1,6 @@
-package io.github.chan808.authtemplate.auth.infrastructure.security
+package io.github.chan808.agolive.auth.infrastructure.security
 
-import io.github.chan808.authtemplate.auth.application.port.AccessTokenPort
+import io.github.chan808.agolive.auth.application.port.AccessTokenPort
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys

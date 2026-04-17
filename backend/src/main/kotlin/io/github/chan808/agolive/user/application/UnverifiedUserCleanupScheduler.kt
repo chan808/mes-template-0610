@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.user.application
+package io.github.chan808.agolive.user.application
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value

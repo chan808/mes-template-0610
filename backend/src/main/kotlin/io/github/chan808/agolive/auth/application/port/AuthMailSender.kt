@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.application.port
+package io.github.chan808.agolive.auth.application.port
 
 /**
  * auth 모듈의 메일 발송 추상화.

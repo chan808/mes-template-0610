@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.user.presentation
+package io.github.chan808.agolive.user.presentation
 
-import io.github.chan808.authtemplate.user.domain.AvatarTemplate
-import io.github.chan808.authtemplate.user.domain.User
+import io.github.chan808.agolive.user.domain.AvatarTemplate
+import io.github.chan808.agolive.user.domain.User
 import java.time.OffsetDateTime
 
 data class UserProfileResponse(

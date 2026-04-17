@@ -1,7 +1,7 @@
-package io.github.chan808.authtemplate.auth.infrastructure.redis
+package io.github.chan808.agolive.auth.infrastructure.redis
 
-import io.github.chan808.authtemplate.auth.application.port.TokenStore
-import io.github.chan808.authtemplate.auth.domain.RefreshTokenSession
+import io.github.chan808.agolive.auth.application.port.TokenStore
+import io.github.chan808.agolive.auth.domain.RefreshTokenSession
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Component

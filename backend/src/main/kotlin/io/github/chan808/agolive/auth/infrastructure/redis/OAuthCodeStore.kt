@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.infrastructure.redis
+package io.github.chan808.agolive.auth.infrastructure.redis
 
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component

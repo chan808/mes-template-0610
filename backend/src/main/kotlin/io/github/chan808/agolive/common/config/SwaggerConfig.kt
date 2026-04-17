@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common.config
+package io.github.chan808.agolive.common.config
 
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI

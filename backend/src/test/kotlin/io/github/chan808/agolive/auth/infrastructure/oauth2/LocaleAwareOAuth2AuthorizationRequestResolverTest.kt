@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.auth.infrastructure.oauth2
+package io.github.chan808.agolive.auth.infrastructure.oauth2
 
 import io.mockk.every
 import io.mockk.mockk

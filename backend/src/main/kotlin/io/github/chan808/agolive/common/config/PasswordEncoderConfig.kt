@@ -1,4 +1,4 @@
-package io.github.chan808.authtemplate.common.config
+package io.github.chan808.agolive.common.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
