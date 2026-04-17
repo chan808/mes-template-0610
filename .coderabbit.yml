@@ -1,0 +1,13 @@
+reviews:
+  auto_review: true
+
+  # 너무 잡다한 코멘트 줄이기
+  high_level_summary: true
+
+  # PR 크기 클 때만 상세 분석
+  review_level: medium
+
+  # 특정 파일 제외 (선택)
+  ignore:
+    - "*.md"
+    - "docs/**"
