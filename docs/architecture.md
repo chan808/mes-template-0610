@@ -108,7 +108,16 @@ POST   /internal/auth/verify            -- Go 전용, Nginx 외부 차단
 ### agolive-realtime
 
 ```
-WS /ws/rooms/{roomId}?token={jwt}
+WS  /ws/rooms/{roomId}?token={jwt}
+GET /health
+```
+
+### agolive-realtime 내부 API (Spring 호출)
+
+```
+POST /internal/auth/verify              -- JWT 검증 + 유저 정보 반환 (Authorization 헤더 필요)
+GET  /internal/rooms/{roomId}           -- 방 정보 조회 (maxCapacity, status)
+POST /internal/rooms/{roomId}/messages  -- 메시지 저장
 ```
 
 ---

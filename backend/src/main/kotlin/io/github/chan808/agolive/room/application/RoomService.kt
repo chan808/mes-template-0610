@@ -3,6 +3,7 @@ package io.github.chan808.agolive.room.application
 import io.github.chan808.agolive.common.ErrorCode
 import io.github.chan808.agolive.common.RoomException
 import io.github.chan808.agolive.room.api.RoomApi
+import io.github.chan808.agolive.room.api.RoomInfo
 import io.github.chan808.agolive.room.domain.Room
 import io.github.chan808.agolive.room.infrastructure.persistence.RoomRepository
 import io.github.chan808.agolive.room.presentation.CreateRoomRequest
@@ -69,6 +70,11 @@ class RoomService(private val roomRepository: RoomRepository) : RoomApi {
 
     override fun existsActiveRoom(roomId: Long): Boolean =
         roomRepository.findByIdAndDeletedAtIsNull(roomId) != null
+
+    override fun getActiveRoomInfo(roomId: Long): RoomInfo? {
+        val room = roomRepository.findByIdAndDeletedAtIsNull(roomId) ?: return null
+        return RoomInfo(room.id, room.maxCapacity, room.status.name)
+    }
 
     private fun require(roomId: Long): Room =
         roomRepository.findByIdAndDeletedAtIsNull(roomId) ?: throw RoomException(ErrorCode.ROOM_NOT_FOUND)

@@ -48,6 +48,29 @@ services:
     networks:
       - agolive-network
 
+  realtime:
+    build:
+      context: ./realtime
+      dockerfile: Dockerfile
+    restart: always
+    env_file: .env
+    environment:
+      REDIS_ADDR: redis:6379
+      INTERNAL_API_URL: http://api:8080
+      PORT: "8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-network
+
   frontend:
     build:
       context: ./frontend
@@ -66,8 +89,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - api
-      - frontend
+      api:
+        condition: service_started
+      realtime:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     networks:
       - agolive-network
 

@@ -85,6 +85,8 @@ class SecurityConfig(
                     it.requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                 }
                 it.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                // Go 실시간 서버 전용 내부 API — Nginx에서 외부 차단, Spring Security 불필요
+                it.requestMatchers("/internal/rooms/**").permitAll()
                 if (publicInfoEndpoint) {
                     it.requestMatchers("/actuator/info").permitAll()
                 } else {
