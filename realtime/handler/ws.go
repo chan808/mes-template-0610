@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chan808/agolive-realtime/config"
@@ -139,26 +141,64 @@ func writePump(ctx context.Context, conn *websocket.Conn, c *hub.Client) {
 	}
 }
 
+const initialX = 600.0
+const initialY = 400.0
+
 func (h *Handler) enter(ctx context.Context, c *hub.Client) {
 	h.rdb.SAdd(ctx, "room:members:"+c.RoomID, c.UserID)
 	h.hub.Join(c)
 
-	msg := mustMarshal(model.ServerMessage{
-		Type:    "join",
-		Payload: model.JoinPayload{UserID: c.UserID, Nickname: c.Nickname},
-	})
-	h.hub.Publish(ctx, c.RoomID, msg)
+	// 입장 이벤트 브로드캐스트
+	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.JoinEvent{Type: "join", UserID: c.UserID, Nickname: c.Nickname}))
+
+	// 신규 입장자 초기 위치를 기존 접속자에게 브로드캐스트
+	presenceVal, _ := json.Marshal(map[string]any{"x": initialX, "y": initialY, "nickname": c.Nickname, "avatarId": c.AvatarID})
+	h.rdb.Set(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), presenceVal, 30*time.Second)
+	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.PresenceEvent{
+		Type: "presence", UserID: c.UserID, X: initialX, Y: initialY, Nickname: c.Nickname, AvatarID: c.AvatarID,
+	}))
+
+	// 기존 접속자 위치를 신규 입장자에게 전송
+	h.sendExistingPresences(ctx, c)
+
 	slog.Info("유저 입장", "userId", c.UserID, "roomId", c.RoomID)
+}
+
+func (h *Handler) sendExistingPresences(ctx context.Context, c *hub.Client) {
+	keys, err := h.rdb.Keys(ctx, fmt.Sprintf("presence:%s:*", c.RoomID)).Result()
+	if err != nil || len(keys) == 0 {
+		return
+	}
+	for _, key := range keys {
+		parts := strings.Split(key, ":")
+		userID, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+		if err != nil || userID == c.UserID {
+			continue
+		}
+		val, err := h.rdb.Get(ctx, key).Result()
+		if err != nil {
+			continue
+		}
+		var p struct {
+			X        float64 `json:"x"`
+			Y        float64 `json:"y"`
+			Nickname string  `json:"nickname"`
+			AvatarID *int64  `json:"avatarId"`
+		}
+		if json.Unmarshal([]byte(val), &p) != nil {
+			continue
+		}
+		sendToClient(c, mustMarshal(model.PresenceEvent{
+			Type: "presence", UserID: userID, X: p.X, Y: p.Y, Nickname: p.Nickname, AvatarID: p.AvatarID,
+		}))
+	}
 }
 
 func (h *Handler) leave(c *hub.Client) {
 	ctx := context.Background()
 
 	// leave 이벤트를 hub에서 제거하기 전에 발행
-	msg := mustMarshal(model.ServerMessage{
-		Type:    "leave",
-		Payload: model.LeavePayload{UserID: c.UserID},
-	})
+	msg := mustMarshal(model.LeaveEvent{Type: "leave", UserID: c.UserID})
 	h.hub.Publish(ctx, c.RoomID, msg)
 
 	h.hub.Leave(c)
@@ -170,89 +210,66 @@ func (h *Handler) leave(c *hub.Client) {
 func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte) {
 	var msg model.ClientMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
-		sendToClient(c, model.ServerMessage{
-			Type:    "error",
-			Payload: model.ErrorPayload{Code: "INVALID_MESSAGE", Message: "잘못된 메시지 형식입니다."},
-		})
+		sendError(c, "INVALID_MESSAGE", "잘못된 메시지 형식입니다.")
 		return
 	}
 
 	switch msg.Type {
 	case "move":
-		h.handleMove(ctx, c, msg.Payload)
+		h.handleMove(ctx, c, msg)
 	case "chat":
-		h.handleChat(ctx, c, msg.Payload)
+		h.handleChat(ctx, c, msg)
 	case "ping":
 		h.handlePing(ctx, c)
 	default:
-		sendToClient(c, model.ServerMessage{
-			Type:    "error",
-			Payload: model.ErrorPayload{Code: "UNKNOWN_EVENT", Message: "알 수 없는 이벤트입니다."},
-		})
+		sendError(c, "UNKNOWN_EVENT", "알 수 없는 이벤트입니다.")
 	}
 }
 
-func (h *Handler) handleMove(ctx context.Context, c *hub.Client, payload json.RawMessage) {
-	var p model.MovePayload
-	if err := json.Unmarshal(payload, &p); err != nil {
-		sendToClient(c, model.ServerMessage{
-			Type:    "error",
-			Payload: model.ErrorPayload{Code: "INVALID_PAYLOAD", Message: "잘못된 move 페이로드입니다."},
-		})
+func (h *Handler) handleMove(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
+	if msg.X == nil || msg.Y == nil {
+		sendError(c, "INVALID_PAYLOAD", "잘못된 move 페이로드입니다.")
 		return
 	}
 
 	// presence 저장 (TTL 30s)
 	presenceVal, _ := json.Marshal(map[string]any{
-		"x": p.X, "y": p.Y, "nickname": c.Nickname, "avatarId": c.AvatarID,
+		"x": *msg.X, "y": *msg.Y, "nickname": c.Nickname, "avatarId": c.AvatarID,
 	})
 	h.rdb.Set(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), presenceVal, 30*time.Second)
 
-	msg := mustMarshal(model.ServerMessage{
-		Type: "presence",
-		Payload: model.PresencePayload{
-			UserID: c.UserID, X: p.X, Y: p.Y,
-			Nickname: c.Nickname, AvatarID: c.AvatarID,
-		},
+	broadcast := mustMarshal(model.PresenceEvent{
+		Type: "presence", UserID: c.UserID, X: *msg.X, Y: *msg.Y,
+		Nickname: c.Nickname, AvatarID: c.AvatarID,
 	})
-	h.hub.Publish(ctx, c.RoomID, msg)
+	h.hub.Publish(ctx, c.RoomID, broadcast)
 }
 
-func (h *Handler) handleChat(ctx context.Context, c *hub.Client, payload json.RawMessage) {
-	var p model.ChatPayload
-	if err := json.Unmarshal(payload, &p); err != nil {
-		sendToClient(c, model.ServerMessage{
-			Type:    "error",
-			Payload: model.ErrorPayload{Code: "INVALID_PAYLOAD", Message: "잘못된 chat 페이로드입니다."},
-		})
+func (h *Handler) handleChat(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
+	if msg.Content == "" {
+		sendError(c, "INVALID_PAYLOAD", "잘못된 chat 페이로드입니다.")
 		return
 	}
 
-	record, err := h.saveMessage(ctx, c, p.Content)
+	record, err := h.saveMessage(ctx, c, msg.Content)
 	if err != nil {
 		slog.Error("메시지 저장 실패", "err", err, "userId", c.UserID, "roomId", c.RoomID)
-		sendToClient(c, model.ServerMessage{
-			Type:    "error",
-			Payload: model.ErrorPayload{Code: "INTERNAL_ERROR", Message: "메시지 저장에 실패했습니다."},
-		})
+		sendError(c, "INTERNAL_ERROR", "메시지 저장에 실패했습니다.")
 		return
 	}
 
-	msg := mustMarshal(model.ServerMessage{
-		Type: "chat",
-		Payload: model.ChatEventPayload{
-			MessageID: record.ID, UserID: c.UserID,
-			Content: p.Content, CreatedAt: record.CreatedAt,
-		},
+	broadcast := mustMarshal(model.ChatEvent{
+		Type: "chat", MessageID: record.ID, UserID: c.UserID,
+		Content: msg.Content, CreatedAt: record.CreatedAt,
 	})
-	h.hub.Publish(ctx, c.RoomID, msg)
+	h.hub.Publish(ctx, c.RoomID, broadcast)
 }
 
 func (h *Handler) handlePing(ctx context.Context, c *hub.Client) {
 	// presence TTL 갱신
 	h.rdb.Expire(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), 30*time.Second)
 
-	sendToClient(c, model.ServerMessage{Type: "pong", Payload: struct{}{}})
+	sendToClient(c, mustMarshal(model.PongEvent{Type: "pong"}))
 }
 
 // verifyToken은 Spring /internal/auth/verify를 호출해 토큰을 검증하고 유저 정보를 반환한다
@@ -284,8 +301,8 @@ func (h *Handler) verifyToken(ctx context.Context, token string) (*userInfo, err
 		return nil, err
 	}
 
-	nickname := ""
-	if body.Data.Nickname != nil {
+	nickname := fmt.Sprintf("사용자%d", body.Data.UserID)
+	if body.Data.Nickname != nil && *body.Data.Nickname != "" {
 		nickname = *body.Data.Nickname
 	}
 	return &userInfo{UserID: body.Data.UserID, Nickname: nickname, AvatarID: body.Data.AvatarID}, nil
@@ -374,12 +391,15 @@ func writeJSONError(w http.ResponseWriter, code, message string, status int) {
 	json.NewEncoder(w).Encode(map[string]string{"code": code, "message": message})
 }
 
-func sendToClient(c *hub.Client, msg model.ServerMessage) {
-	data := mustMarshal(msg)
+func sendToClient(c *hub.Client, data []byte) {
 	select {
 	case c.Send <- data:
 	default:
 	}
+}
+
+func sendError(c *hub.Client, code, message string) {
+	sendToClient(c, mustMarshal(model.ErrorEvent{Type: "error", Code: code, Message: message}))
 }
 
 func mustMarshal(v any) []byte {

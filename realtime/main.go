@@ -12,6 +12,7 @@ import (
 	"github.com/chan808/agolive-realtime/config"
 	"github.com/chan808/agolive-realtime/handler"
 	"github.com/chan808/agolive-realtime/hub"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -39,6 +40,7 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

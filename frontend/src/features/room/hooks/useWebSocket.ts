@@ -133,7 +133,8 @@ export function useWebSocket(roomId: number) {
 
     ws.onclose = () => {
       stopPing();
-      if (unmountedRef.current) return;
+      // 이미 교체된 이전 연결의 close 이벤트는 무시 (StrictMode 이중 마운트 방어)
+      if (unmountedRef.current || wsRef.current !== ws) return;
 
       setStatus("disconnected");
       setWs(null);

@@ -5,8 +5,15 @@ management:
         include: health,info,prometheus
       public:
         info: false
-        prometheus: false
+        # Nginx가 /actuator/ 외부 차단하므로 Docker 내부에서 Prometheus 스크래핑 허용
+        prometheus: true
   endpoint:
     health:
       show-details: never
       show-components: never
+
+app:
+  http:
+    client-ip:
+      # Nginx 리버스 프록시 뒤에서 X-Forwarded-For 신뢰
+      trust-forwarded-headers: true

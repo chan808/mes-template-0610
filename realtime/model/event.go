@@ -1,29 +1,17 @@
 package model
 
-import "encoding/json"
-
-// 클라이언트 → 서버
+// 클라이언트 → 서버 (flat)
 type ClientMessage struct {
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Type    string   `json:"type"`
+	X       *float64 `json:"x"`
+	Y       *float64 `json:"y"`
+	Content string   `json:"content"`
 }
 
-type MovePayload struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
+// 서버 → 클라이언트 (flat, per-type structs)
 
-type ChatPayload struct {
-	Content string `json:"content"`
-}
-
-// 서버 → 클라이언트
-type ServerMessage struct {
-	Type    string `json:"type"`
-	Payload any    `json:"payload"`
-}
-
-type PresencePayload struct {
+type PresenceEvent struct {
+	Type     string  `json:"type"`
 	UserID   int64   `json:"userId"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
@@ -31,23 +19,31 @@ type PresencePayload struct {
 	AvatarID *int64  `json:"avatarId"`
 }
 
-type ChatEventPayload struct {
+type ChatEvent struct {
+	Type      string `json:"type"`
 	MessageID int64  `json:"messageId"`
 	UserID    int64  `json:"userId"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
 }
 
-type JoinPayload struct {
+type JoinEvent struct {
+	Type     string `json:"type"`
 	UserID   int64  `json:"userId"`
 	Nickname string `json:"nickname"`
 }
 
-type LeavePayload struct {
-	UserID int64 `json:"userId"`
+type LeaveEvent struct {
+	Type   string `json:"type"`
+	UserID int64  `json:"userId"`
 }
 
-type ErrorPayload struct {
+type PongEvent struct {
+	Type string `json:"type"`
+}
+
+type ErrorEvent struct {
+	Type    string `json:"type"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }

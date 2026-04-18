@@ -1,0 +1,167 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: agolive-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-net
+
+  # ── API Blue/Green ─────────────────────────────────────────────
+  api-blue:
+    image: ${ECR_REGISTRY}/agolive-api:${API_BLUE_TAG:-latest}
+    container_name: agolive-api-blue
+    restart: unless-stopped
+    env_file: /opt/agolive/.env
+    environment:
+      REDIS_HOST: redis
+      SPRING_PROFILES_ACTIVE: prod,observability
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - agolive-net
+
+  api-green:
+    image: ${ECR_REGISTRY}/agolive-api:${API_GREEN_TAG:-latest}
+    container_name: agolive-api-green
+    restart: unless-stopped
+    env_file: /opt/agolive/.env
+    environment:
+      REDIS_HOST: redis
+      SPRING_PROFILES_ACTIVE: prod,observability
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - agolive-net
+
+  # ── Realtime Blue/Green ────────────────────────────────────────
+  realtime-blue:
+    image: ${ECR_REGISTRY}/agolive-realtime:${REALTIME_BLUE_TAG:-latest}
+    container_name: agolive-realtime-blue
+    restart: unless-stopped
+    env_file: /opt/agolive/.env
+    environment:
+      REDIS_ADDR: redis:6379
+      INTERNAL_API_URL: http://api-blue:8080
+      PORT: "8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-net
+
+  realtime-green:
+    image: ${ECR_REGISTRY}/agolive-realtime:${REALTIME_GREEN_TAG:-latest}
+    container_name: agolive-realtime-green
+    restart: unless-stopped
+    env_file: /opt/agolive/.env
+    environment:
+      REDIS_ADDR: redis:6379
+      INTERNAL_API_URL: http://api-green:8080
+      PORT: "8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-net
+
+  # ── Frontend (B/G 불필요, 빠른 재시작) ────────────────────────
+  frontend:
+    image: ${ECR_REGISTRY}/agolive-frontend:${FRONTEND_IMAGE_TAG:-latest}
+    container_name: agolive-frontend
+    restart: unless-stopped
+    networks:
+      - agolive-net
+
+  # ── Nginx ──────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: agolive-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/agolive/infra/docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - /opt/agolive/infra/docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /opt/agolive/certbot/conf:/etc/letsencrypt:ro
+      - /opt/agolive/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - frontend
+    networks:
+      - agolive-net
+
+  # ── Monitoring ─────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: agolive-prometheus
+    restart: unless-stopped
+    volumes:
+      - /opt/agolive/infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    networks:
+      - agolive-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: agolive-node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - agolive-net
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: agolive-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - /opt/agolive/infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - agolive-net
+
+networks:
+  agolive-net:
+    driver: bridge
+
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:

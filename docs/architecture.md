@@ -23,7 +23,7 @@ users (id, email, password_hash[nullable], nickname[nullable], avatar_id→avata
        email_verified[default false], token_version[default 0], withdrawn_at[nullable],
        created_at, updated_at)
 
-rooms (id, invite_token[uuid, unique], invite_token_expires_at[nullable],
+rooms (id, invite_token[uuid, unique],
        name, owner_id→users, is_private, max_capacity[default 10],
        status[active|closed], deleted_at[nullable], created_at, updated_at)
 
@@ -76,7 +76,7 @@ message → room :: api
 ### agolive-api
 
 ```
-POST   /api/users                          -- 회원가입 (이메일/비밀번호)
+POST   /api/v1/users                       -- 회원가입 (이메일/비밀번호)
 POST   /api/auth/login
 POST   /api/auth/logout
 POST   /api/auth/reissue

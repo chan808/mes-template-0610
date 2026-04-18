@@ -54,7 +54,7 @@ class RoomService(
         val room = requireOwner(userId, roomId)
         if (request.maxCapacity != null) {
             val currentCount = redisTemplate.opsForSet().size("room:members:$roomId") ?: 0L
-            if (request.maxCapacity < currentCount) throw RoomException(ErrorCode.CAPACITY_BELOW_CURRENT)
+            if (request.maxCapacity.toLong() < currentCount) throw RoomException(ErrorCode.CAPACITY_BELOW_CURRENT)
         }
         room.update(request.name, request.isPrivate, request.maxCapacity)
         log.info("[ROOM] updated roomId={} userId={}", roomId, userId)

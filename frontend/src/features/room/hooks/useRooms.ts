@@ -13,7 +13,7 @@ export const roomKeys = {
 export function useRooms() {
   return useQuery({
     queryKey: roomKeys.list(),
-    queryFn: () => roomApi.getRooms().then((res) => res.data.data ?? []),
+    queryFn: () => roomApi.getRooms().then((res) => res.data.data?.content ?? []),
   });
 }
 

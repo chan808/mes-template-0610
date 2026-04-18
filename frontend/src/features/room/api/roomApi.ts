@@ -2,6 +2,7 @@ import api from "@/shared/api/axios";
 import { ApiResponse } from "@/shared/types/api";
 import {
   CreateRoomRequest,
+  PageResponse,
   Room,
   RoomJoinInfo,
   RoomSummary,
@@ -13,7 +14,7 @@ export const roomApi = {
     api.post<ApiResponse<Room>>("/api/v1/rooms", data),
 
   getRooms: () =>
-    api.get<ApiResponse<RoomSummary[]>>("/api/v1/rooms"),
+    api.get<ApiResponse<PageResponse<RoomSummary>>>("/api/v1/rooms"),
 
   getRoom: (id: number) =>
     api.get<ApiResponse<Room>>(`/api/v1/rooms/${id}`),

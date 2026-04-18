@@ -4,8 +4,15 @@ import (
 	"context"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redis/go-redis/v9"
 )
+
+var wsActiveConnections = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "ws_active_connections_total",
+	Help: "현재 활성 WebSocket 연결 수",
+})
 
 type Client struct {
 	UserID   int64
@@ -68,6 +75,7 @@ func (h *Hub) Join(c *Client) {
 		h.startSubscriber(c.RoomID, r)
 	}
 	r.clients[c] = true
+	wsActiveConnections.Inc()
 }
 
 // Leave는 클라이언트를 룸에서 제거하고 마지막 퇴장 시 Redis Pub/Sub 구독을 해제한다
@@ -81,6 +89,7 @@ func (h *Hub) Leave(c *Client) {
 	}
 	delete(r.clients, c)
 	c.SignalDone()
+	wsActiveConnections.Dec()
 	if len(r.clients) == 0 {
 		r.ps.Close()
 		delete(h.rooms, c.RoomID)

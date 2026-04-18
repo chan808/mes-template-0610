@@ -1,5 +1,9 @@
 reviews:
-  auto_review: true
+  auto_review:
+    enabled: true
+    base_branches:
+      - main
+      - dev
 
   # 너무 잡다한 코멘트 줄이기
   high_level_summary: true
