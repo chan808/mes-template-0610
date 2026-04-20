@@ -11,7 +11,7 @@ import type { AxiosError } from "axios";
 import { authApi } from "@/features/auth/api/authApi";
 import { useCooldown } from "@/features/auth/hooks/useCooldown";
 import { getRetryAfterSeconds } from "@/features/auth/utils/retryAfter";
-import { memberApi } from "@/features/member/api/memberApi";
+import { userApi } from "@/features/member/api/userApi";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import {
@@ -60,7 +60,7 @@ export default function SignupForm() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await memberApi.signup(data);
+      await userApi.signup(data);
       setSubmittedEmail(data.email.trim().toLowerCase());
       setResendStatus("idle");
       setResendError("");

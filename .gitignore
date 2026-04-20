@@ -30,7 +30,15 @@ Thumbs.db
 .env.*
 !.env.example
 
+# --- Infra (EC2에서 생성되는 파일, 커밋 안 함) ---
+infra/docker/nginx/conf.d/*.conf
+infra/terraform/terraform.tfvars
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/.terraform.lock.hcl
+
 # --- ai ---
-CLAUDE.md
-AGENTS.md
+#CLAUDE.md
+#AGENTS.md
 .claude/
