@@ -39,6 +39,6 @@ infra/terraform/*.tfstate.backup
 infra/terraform/.terraform.lock.hcl
 
 # --- ai ---
-CLAUDE.md
-AGENTS.md
+#CLAUDE.md
+#AGENTS.md
 .claude/

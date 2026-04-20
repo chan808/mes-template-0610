@@ -1,9 +1,11 @@
+# 로컬 개발용: 인프라만 실행 (IDE에서 앱 직접 실행 시)
+# 기본: docker compose -f docker-compose.infra.yml up -d
+# 모니터링 포함: docker compose -f docker-compose.infra.yml --profile observability up -d
 services:
   postgres:
     image: postgres:16-alpine
-    restart: always
-    env_file:
-      - .env
+    restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -23,9 +25,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    restart: always
-    env_file:
-      - .env
+    restart: unless-stopped
+    env_file: .env
     ports:
       - "6379:6379"
     volumes:
@@ -47,7 +48,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/local.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -66,9 +67,9 @@ services:
     ports:
       - "3001:3000"
     volumes:
-      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards/json:ro
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards/json:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus

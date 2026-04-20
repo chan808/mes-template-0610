@@ -189,8 +189,10 @@ resource "aws_db_instance" "rds" {
 
   publicly_accessible     = false
   multi_az                = false
-  backup_retention_period = 0 # 프리티어: 0일 (운영 시 7일로 변경)
-  skip_final_snapshot     = true
+  backup_retention_period = 7
+  skip_final_snapshot     = false
+  final_snapshot_identifier = "${var.project_name}-rds-final"
+  deletion_protection     = true
 
   tags = merge(var.tags, { Name = "${var.project_name}-rds" })
 }

@@ -1,169 +1,67 @@
-# Auth Template
+# Agolive
 
-Production-oriented auth starter for projects that need a strong account system from day one.
+공간 기반 실시간 협업 플랫폼. 사용자가 가상 공간에 아바타로 입장해 위치를 공유하고 채팅한다.
 
-This repository is intentionally not a minimal boilerplate. It is an opinionated auth starter with:
+## 서비스 구조
 
-- email-first accounts
-- optional OAuth login
-- email verification
-- password reset
-- JWT access tokens
-- Redis-backed refresh sessions
-- baseline rate limiting
-- observability-ready backend defaults
+```
+Browser ──► Nginx ──► agolive-frontend (Next.js,              :3000)
+                  ├──► agolive-api      (Kotlin / Spring Boot, :8080)
+                  └──► agolive-realtime (Go,                   :8081)
 
-## Positioning
-
-Use this template when authentication and member management should be part of the real product foundation.
-
-Good fit:
-
-- customer-facing web products
-- collaboration tools with invitations and protected deep links
-- services that want email login plus optional OAuth convenience
-- teams that are comfortable with MySQL and Redis as default infra
-
-Less ideal:
-
-- throwaway prototypes
-- projects that want no Redis dependency
-- products that want OAuth-only identity and nothing else
-
-## Core Principles
-
-- Email is the primary account identifier.
-- OAuth is optional convenience, not the only supported access path.
-- Protected routes should preserve `returnTo`.
-- Post-login navigation should use `returnTo` first, then the configured authenticated home path.
-- Bundled authenticated pages are examples, not mandatory product structure.
-- The default frontend auth protection model is client-side for authenticated app areas.
-
-## Included
-
-### Backend
-
-- Kotlin + Spring Boot 4
-- Spring Security
-- Spring Modulith boundaries
-- MySQL + Flyway
-- Redis for refresh sessions, verification tokens, password reset tokens, and rate limiting
-- email verification and password reset flows
-- optional Google / Naver / Kakao OAuth
-- Actuator + Micrometer + Prometheus + Grafana
-- unit tests and integration tests
-
-### Frontend
-
-- Next.js 16 + React 19
-- next-intl
-- TanStack Query
-- Zustand
-- auth pages for login, signup, forgot password, reset password, verify email, and OAuth callback
-- `returnTo` support for protected pages and invitation-style deep links
-- sample authenticated account pages
-
-## Project Structure
-
-```text
-auth-template/
-|-- backend/
-|   |-- src/main/kotlin
-|   |-- src/main/resources
-|   |-- src/test/kotlin
-|   |-- docker-compose.yml
-|   |-- docker-compose.storage.yml
-|   |-- .env.example
-|   `-- OBSERVABILITY.md
-|-- frontend/
-|   |-- src
-|   |-- messages
-|   |-- public
-|   |-- .env.example
-|   |-- AUTH_MODEL.md
-|   `-- README.md
-`-- README.md
+agolive-api      ──► PostgreSQL (RDS)
+agolive-api      ──► Redis
+agolive-realtime ──► Redis (Pub/Sub)
 ```
 
-## Quick Start
+## 로컬 개발
 
-### 1. Config
+### 사전 준비
+- Docker Desktop
+- `.env` 작성 (`.env.example` 복사 후 수정)
 
-- copy `backend/.env.example` to `backend/.env`
-- copy `frontend/.env.example` to `frontend/.env.local`
-
-### 2. Infra
-
+### 인프라만 띄우기 (IDE에서 앱 직접 실행 시)
 ```bash
-cd backend
-docker compose up -d mysql redis
+docker compose -f docker-compose.infra.yml up -d
+
+# 모니터링(Prometheus + Grafana)까지 포함
+docker compose -f docker-compose.infra.yml --profile observability up -d
 ```
 
-Optional observability:
-
+### 전체 스택 한 번에 실행
 ```bash
-cd backend
-docker compose --profile observability up -d prometheus grafana
+docker compose up -d
 ```
 
-Optional object storage:
+## 배포
 
+`main` 브랜치에 push하면 GitHub Actions가 자동으로:
+1. 테스트 실행
+2. Docker 이미지 빌드 → ECR push
+3. EC2에 SSH 접속 → Blue/Green 배포 실행
+
+수동 배포:
 ```bash
-cd backend
-docker compose -f docker-compose.yml -f docker-compose.storage.yml up -d minio
+/opt/agolive/infra/scripts/deploy.sh api <image-tag>
+/opt/agolive/infra/scripts/deploy.sh realtime <image-tag>
+/opt/agolive/infra/scripts/deploy.sh frontend <image-tag>
 ```
 
-### 3. Run
+## 기술 스택
 
-Backend:
+| 분류 | 기술 |
+|---|---|
+| Backend API | Kotlin / Spring Boot 4 / Spring Data JPA / QueryDSL |
+| Realtime | Go 1.26 / coder/websocket / Redis Pub/Sub |
+| Frontend | Next.js 16 / React 19 / TypeScript / TanStack Query / Zustand |
+| DB | PostgreSQL 16 (RDS) / Redis 7 |
+| Infra | AWS EC2 + RDS + ECR / Terraform / GitHub Actions |
+| Proxy | Nginx (Blue/Green upstream 전환) |
+| 인증 | JWT / Spring Security |
 
-```bash
-cd backend
-./gradlew bootRun
-```
+## 문서
 
-Frontend:
-
-```bash
-cd frontend
-pnpm install
-pnpm dev
-```
-
-## Verify
-
-Backend unit tests:
-
-```bash
-cd backend
-./gradlew test
-```
-
-Backend integration tests:
-
-```bash
-cd backend
-./gradlew integrationTest
-```
-
-Frontend:
-
-```bash
-cd frontend
-pnpm build
-```
-
-## Notes
-
-- Redis is a core dependency in this starter.
-- OAuth is optional, but email login remains the baseline path.
-- OAuth and HIBP external lookup can be controlled with explicit feature flags.
-- The current OAuth locale and return-to handoff uses the server session during the OAuth round-trip.
-- The bundled `dashboard` route is a sample authenticated area and should usually be replaced in a real project.
-- Authenticated route protection in the frontend is intentionally CSR-first. Server-component or SSR-protected product pages need extra project-specific work.
-
-## Documents
-
-- [backend/OBSERVABILITY.md](backend/OBSERVABILITY.md)
-- [frontend/README.md](frontend/README.md)
-- [frontend/AUTH_MODEL.md](frontend/AUTH_MODEL.md)
+- [`docs/architecture.md`](docs/architecture.md) — 스키마, API, 비즈니스 룰
+- [`docs/prd.md`](docs/prd.md) — 서비스 목적, 기능, UX
+- [`docs/infra.md`](docs/infra.md) — 인프라 구조, 배포/롤백/장애 대응 런북
+- [`docs/adr/`](docs/adr/) — 기술 결정 기록

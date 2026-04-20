@@ -116,7 +116,7 @@ services:
     container_name: agolive-prometheus
     restart: unless-stopped
     volumes:
-      - /opt/agolive/infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /opt/agolive/infra/monitoring/prometheus/prod.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -151,7 +151,9 @@ services:
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - grafana_data:/var/lib/grafana
-      - /opt/agolive/infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /opt/agolive/infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - /opt/agolive/infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - /opt/agolive/infra/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards/json:ro
     depends_on:
       - prometheus
     networks:
