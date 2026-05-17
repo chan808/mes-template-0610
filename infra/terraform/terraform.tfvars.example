@@ -5,4 +5,3 @@ github_org  = "chan808"
 github_repo = "agolive"
 
 db_username = "agolive"
-db_password = "REPLACE_ME_STRONG_PASSWORD"
