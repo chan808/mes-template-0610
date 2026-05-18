@@ -17,3 +17,8 @@ output "gha_role_arn" {
   value       = aws_iam_role.gha_ecr_push.arn
   description = "GitHub Actions OIDC 역할 ARN (GitHub Secret AWS_ROLE_ARN에 등록)"
 }
+
+output "rds_master_user_secret_arn" {
+  value       = aws_db_instance.rds.master_user_secret[0].secret_arn
+  description = "RDS master user password secret ARN in AWS Secrets Manager"
+}

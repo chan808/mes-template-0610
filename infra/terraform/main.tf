@@ -35,7 +35,7 @@ resource "aws_key_pair" "ec2" {
 # ── EC2 보안 그룹 ───────────────────────────────────────────────
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
-  description = "EC2 보안 그룹 (80/443 전체, SSH 내 IP만)"
+  description = "EC2 security group (80/443 public, SSH from my IP only)"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -55,7 +55,7 @@ resource "aws_security_group" "ec2" {
   }
 
   ingress {
-    description = "SSH (내 IP만)"
+    description = "SSH (my IP only)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -75,7 +75,7 @@ resource "aws_security_group" "ec2" {
 # ── RDS 보안 그룹 (EC2 SG에서만 접근 허용) ────────────────────
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
-  description = "RDS 보안 그룹 (EC2 SG에서만 5432 허용)"
+  description = "RDS security group (5432 from EC2 SG only)"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -182,17 +182,16 @@ resource "aws_db_instance" "rds" {
 
   db_name  = var.db_name
   username = var.db_username
-  password = var.db_password
+  manage_master_user_password = true
 
   db_subnet_group_name   = aws_db_subnet_group.rds.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   publicly_accessible     = false
   multi_az                = false
-  backup_retention_period = 7
-  skip_final_snapshot     = false
-  final_snapshot_identifier = "${var.project_name}-rds-final"
-  deletion_protection     = true
+  backup_retention_period = 0
+  skip_final_snapshot     = true
+  deletion_protection     = false
 
   tags = merge(var.tags, { Name = "${var.project_name}-rds" })
 }

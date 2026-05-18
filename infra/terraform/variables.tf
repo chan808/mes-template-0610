@@ -42,11 +42,6 @@ variable "db_username" {
   type = string
 }
 
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "github_org" {
   type        = string
   description = "GitHub 사용자명 또는 조직명 (예: chan808)"

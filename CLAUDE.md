@@ -21,22 +21,98 @@
 * `docs/prd.md`: 서비스 목적, 기능, UX
 * `docs/adr/`: 기술 결정 기록
 
+## Commands
+
+```bash
+# 인프라 (PostgreSQL, Redis)
+docker compose up -d postgres redis
+
+# 전체 서비스
+docker compose up -d
+
+# Backend API
+cd backend && ./gradlew bootRun
+
+# Realtime
+cd realtime && go run .
+
+# Frontend
+cd frontend && npm run dev    # http://localhost:3000
+cd frontend && npm run lint
+```
+
 ## Principles
 
 * 결정이 필요하면: `docs/architecture.md` 확인 → 과하지 않게 성능과 확장성을 고려한 해결책 → 이유 설명
-* 기능 설계 시 `docs/prd.md`  참고
+* 기능 설계 시 `docs/prd.md` 참고
 * 새 기술/라이브러리 도입은 필요한 경우에만, 먼저 이유를 설명할 것
-* 구현은 minimal but complete. 불필요한 추상화 금지
-* 코드 의도가 불명확할 때만 주석 추가
-* 모듈 추가·변경, 에러 코드 추가·변경, API 변경 시 docs/architecture.md도 함께 업데이트할 것
+* 프로젝트 구조·스택·API·에러 코드 변경 시 CLAUDE.md와 docs/architecture.md도 함께 업데이트할 것
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 ## Comment Style
+
 * 한 줄 주석만 사용, 한국어로 작성
 * 형식: `// 동사+목적어` (예: `// 회원의 모든 리프레시 토큰 세션 무효화`, `// 이메일 기준으로 한 계정에 집중되는 분산 IP 공격 탐지용`)
 * 코드만으로 의도가 불명확하거나 추가 설명이 필요할 때 작성
 
 ## Testing
 
+* CRITICAL: 새 기능 구현 시 테스트를 먼저 작성하고, 테스트가 통과하는 구현을 작성한다 (TDD)
 * 핵심 비즈니스 로직은 반드시 테스트한다 (인증, 권한, 상태 변경, 주요 정책)
 * 내부 구현이 아닌 입력과 결과 중심으로 검증한다
 * 과도한 mock 사용은 지양한다
@@ -55,6 +131,10 @@
 * JWT 파싱, 이벤트 핸들러 로직 단위 테스트
 * 테스트 함수명: `Test_상황_기대결과` 형식
 
+## Git
+
+* 커밋 메시지는 conventional commits 형식을 따른다 (`feat:`, `fix:`, `refactor:`, `docs:`, `infra:`, `chore:` 등)
+
 ## Logging
 
 **Spring (SLF4J)**
@@ -68,13 +148,3 @@
 **Go (slog)**
 * 구조화 로그 JSON 형식으로 출력
 * 동일한 레벨 기준 적용 (INFO / WARN / ERROR / DEBUG)
-
-## Roadmap
-
-| Phase | 핵심 |
-|---|---|
-| 1 (current) | 방 생성/입장, 위치 공유, 채팅 |
-| 2 | 단일 AI 에이전트 소환, 역할 부여 |
-| 3 | 멀티 에이전트 오케스트레이션, 에이전트 간 대화, Human-in-the-loop |
-| 4 | 파일 생성 (Excel/PDF), 도구 실행 (실무 기능) |
-| 5 | 음성 채팅, 공간감 고도화 |
