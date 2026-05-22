@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agolive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agolive}
+      POSTGRES_USER: ${POSTGRES_USER:-agolive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agolive} -d ${POSTGRES_DB:-agolive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-net
+
   redis:
     image: redis:7-alpine
     container_name: agolive-redis
@@ -21,9 +39,12 @@ services:
     restart: unless-stopped
     env_file: /opt/agolive/.env
     environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-agolive}
       REDIS_HOST: redis
       SPRING_PROFILES_ACTIVE: prod,observability
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -35,9 +56,12 @@ services:
     restart: unless-stopped
     env_file: /opt/agolive/.env
     environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-agolive}
       REDIS_HOST: redis
       SPRING_PROFILES_ACTIVE: prod,observability
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -164,6 +188,7 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
   redis_data:
   prometheus_data:
   grafana_data:

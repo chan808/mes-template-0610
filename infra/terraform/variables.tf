@@ -33,15 +33,6 @@ variable "ec2_public_key_path" {
   description = "EC2 접속용 공개키 경로 (예: ~/.ssh/agolive_ec2.pub)"
 }
 
-variable "db_name" {
-  type    = string
-  default = "agolive"
-}
-
-variable "db_username" {
-  type = string
-}
-
 variable "github_org" {
   type        = string
   description = "GitHub 사용자명 또는 조직명 (예: chan808)"

@@ -14,12 +14,12 @@ EC2 (t3.small, Ubuntu 24.04)
         ├── agolive-api-blue / agolive-api-green
         ├── agolive-realtime-blue / agolive-realtime-green
         ├── agolive-frontend
+        ├── postgres       (PostgreSQL 16, EC2 내부)
         ├── redis
         ├── prometheus
         ├── node-exporter
         └── grafana
 
-RDS PostgreSQL 16 (db.t3.micro, EC2 SG에서만 접근 허용)
 ECR (agolive-api / agolive-realtime / agolive-frontend)
 EIP (고정 공인 IP)
 ```
@@ -51,8 +51,6 @@ cp terraform.tfvars.example terraform.tfvars
 #   ec2_public_key_path = "~/.ssh/agolive_ec2.pub"
 #   github_org          = "chan808"
 #   github_repo         = "agolive"
-#   db_username         = "agolive"
-#   db_password         = "강한_비밀번호_32자이상"
 
 terraform init
 terraform plan   # 생성될 리소스 확인
@@ -60,9 +58,9 @@ terraform apply
 ```
 
 출력값 기록:
+
 ```
 ec2_public_ip  → EC2_HOST (GitHub Secret, DNS A 레코드)
-rds_endpoint   → DB_HOST (EC2 .env에 사용)
 ecr_registry   → ECR_REGISTRY (EC2 .env에 사용)
 gha_role_arn   → AWS_ROLE_ARN (GitHub Secret)
 ```
@@ -73,12 +71,12 @@ GitHub 레포 → Settings → Secrets and variables → Actions
 
 **Secrets:**
 
-| 키 | 값 |
-|---|---|
-| `AWS_ROLE_ARN` | terraform output `gha_role_arn` |
-| `AWS_ACCOUNT_ID` | AWS 계정 ID (12자리 숫자) |
-| `EC2_HOST` | terraform output `ec2_public_ip` |
-| `EC2_SSH_KEY` | `~/.ssh/agolive_ec2` 파일 전체 내용 |
+| 키               | 값                                  |
+| ---------------- | ----------------------------------- |
+| `AWS_ROLE_ARN`   | terraform output `gha_role_arn`     |
+| `AWS_ACCOUNT_ID` | AWS 계정 ID (12자리 숫자)           |
+| `EC2_HOST`       | terraform output `ec2_public_ip`    |
+| `EC2_SSH_KEY`    | `~/.ssh/agolive_ec2` 파일 전체 내용 |
 
 **Variables:**
 | 키 | 값 |
@@ -109,10 +107,11 @@ nano /opt/agolive/.env
 ```
 
 필수 입력값:
+
 ```
 POSTGRES_DB=agolive
 POSTGRES_USER=agolive
-POSTGRES_PASSWORD=<terraform db_password와 동일값>
+POSTGRES_PASSWORD=<강한_비밀번호>
 REDIS_PASSWORD=<강한_비밀번호>
 JWT_SECRET=<32자이상_랜덤>
 INTERNAL_SECRET=<랜덤>
@@ -127,11 +126,13 @@ GRAFANA_ADMIN_PASSWORD=<비밀번호>
 ### 6. DNS 설정
 
 도메인 업체 콘솔에서 A 레코드 등록:
+
 ```
 yourdomain.com → <terraform output ec2_public_ip>
 ```
 
 DNS 전파 확인 (수 분~수십 분 소요):
+
 ```bash
 nslookup yourdomain.com
 ```
@@ -143,6 +144,7 @@ nslookup yourdomain.com
 ```
 
 이 스크립트가 수행하는 것:
+
 1. Let's Encrypt 인증서 발급
 2. nginx conf.d 파일 생성 (HTTPS 라우팅, upstream 설정)
 3. Blue/Green 초기 상태 파일 생성 (`.active-api`, `.active-realtime`)
@@ -161,9 +163,9 @@ nslookup yourdomain.com
 `main` 브랜치에 push하면 GitHub Actions가 자동 실행.
 변경된 서비스에 해당하는 workflow만 트리거:
 
-| 변경 경로 | 실행 workflow |
-|---|---|
-| `backend/**` | `deploy-api.yml` |
+| 변경 경로     | 실행 workflow         |
+| ------------- | --------------------- |
+| `backend/**`  | `deploy-api.yml`      |
 | `realtime/**` | `deploy-realtime.yml` |
 | `frontend/**` | `deploy-frontend.yml` |
 
@@ -223,11 +225,11 @@ docker restart agolive-nginx               # 재시작 (최후 수단)
 ### DB 연결 불가 시
 
 ```bash
-# RDS 연결 테스트 (EC2에서)
-psql -h <rds_endpoint> -U agolive -d agolive
+# postgres 컨테이너 상태 확인
+docker logs agolive-postgres --tail 50
 
-# 보안 그룹 확인
-aws ec2 describe-security-groups --region ap-northeast-2
+# postgres 직접 접속
+docker exec -it agolive-postgres psql -U agolive -d agolive
 ```
 
 ### 전체 서비스 재시작
@@ -242,6 +244,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.prod.yml up -d
 ## 모니터링
 
 Grafana: `https://<DOMAIN>/grafana`
+
 - 계정: `.env`의 `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`
 - 대시보드: Backend Observability (Spring Boot 메트릭)
 
@@ -254,6 +257,3 @@ cd infra/terraform
 terraform plan    # 변경사항 확인
 terraform apply   # 적용
 ```
-
-> **주의**: RDS `deletion_protection = true` 설정 중.
-> RDS를 삭제하려면 먼저 `main.tf`에서 `deletion_protection = false`로 변경 후 apply.
