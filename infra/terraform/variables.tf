@@ -8,11 +8,6 @@ variable "aws_region" {
   default = "ap-northeast-2"
 }
 
-variable "allowed_ssh_cidr" {
-  type        = string
-  description = "SSH 허용 IP (예: 1.2.3.4/32)"
-}
-
 variable "ec2_instance_type" {
   type    = string
   default = "t3.small"
