@@ -6,6 +6,7 @@ on:
     paths:
       - 'realtime/**'
       - '.github/workflows/deploy-realtime.yml'
+  workflow_dispatch:
 
 permissions:
   id-token: write
