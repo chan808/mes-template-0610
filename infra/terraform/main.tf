@@ -73,7 +73,7 @@ resource "aws_security_group" "ec2" {
 }
 
 
-# ── EC2 IAM 역할 ────────────────────────────────────────────────
+# ── EC2 IAM 역할 ───────────────────────────────────────────────
 resource "aws_iam_role" "ec2" {
   name = "${var.project_name}-ec2-role"
 
