@@ -72,29 +72,6 @@ resource "aws_security_group" "ec2" {
   tags = merge(var.tags, { Name = "${var.project_name}-ec2-sg" })
 }
 
-# ── RDS 보안 그룹 (EC2 SG에서만 접근 허용) ────────────────────
-resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
-  description = "RDS security group (5432 from EC2 SG only)"
-  vpc_id      = data.aws_vpc.default.id
-
-  ingress {
-    description     = "PostgreSQL from EC2"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(var.tags, { Name = "${var.project_name}-rds-sg" })
-}
 
 # ── EC2 IAM 역할 ────────────────────────────────────────────────
 resource "aws_iam_role" "ec2" {
@@ -161,40 +138,6 @@ resource "aws_eip_association" "app" {
   allocation_id = aws_eip.app.id
 }
 
-# ── RDS PostgreSQL ──────────────────────────────────────────────
-resource "aws_db_subnet_group" "rds" {
-  name       = "${var.project_name}-rds-subnet-group"
-  subnet_ids = data.aws_subnets.default.ids
-
-  tags = merge(var.tags, { Name = "${var.project_name}-rds-subnet-group" })
-}
-
-resource "aws_db_instance" "rds" {
-  identifier = "${var.project_name}-rds"
-
-  engine         = "postgres"
-  engine_version = "16"
-
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-
-  db_name  = var.db_name
-  username = var.db_username
-  manage_master_user_password = true
-
-  db_subnet_group_name   = aws_db_subnet_group.rds.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-
-  publicly_accessible     = false
-  multi_az                = false
-  backup_retention_period = 0
-  skip_final_snapshot     = true
-  deletion_protection     = false
-
-  tags = merge(var.tags, { Name = "${var.project_name}-rds" })
-}
 
 # ── ECR 레포지토리 ──────────────────────────────────────────────
 locals {

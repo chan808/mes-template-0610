@@ -3,5 +3,3 @@ ec2_public_key_path = "~/.ssh/agolive_ec2.pub"
 
 github_org  = "chan808"
 github_repo = "agolive"
-
-db_username = "agolive"
