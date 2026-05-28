@@ -20,18 +20,20 @@ import (
 )
 
 type Handler struct {
-	hub *hub.Hub
-	rdb *redis.Client
-	cfg *config.Config
-	hc  *http.Client
+	hub    *hub.Hub
+	rdb    *redis.Client
+	cfg    *config.Config
+	hc     *http.Client
+	agentC *http.Client // agent SSE용 — timeout 없음
 }
 
 func New(h *hub.Hub, rdb *redis.Client, cfg *config.Config) *Handler {
 	return &Handler{
-		hub: h,
-		rdb: rdb,
-		cfg: cfg,
-		hc:  &http.Client{Timeout: 5 * time.Second},
+		hub:    h,
+		rdb:    rdb,
+		cfg:    cfg,
+		hc:     &http.Client{Timeout: 5 * time.Second},
+		agentC: &http.Client{},
 	}
 }
 
@@ -211,10 +213,29 @@ func (h *Handler) leave(c *hub.Client) {
 	msg := mustMarshal(model.LeaveEvent{Type: "leave", UserID: c.UserID})
 	h.hub.Publish(ctx, c.RoomID, msg)
 
-	h.hub.Leave(c)
+	// 마지막 클라이언트 퇴장으로 룸이 비면 고아 에이전트 정리
+	if orphaned := h.hub.Leave(c); orphaned != nil {
+		orphaned.CancelFn()
+		go h.cleanupAgent(orphaned.AgentID)
+	}
+
 	h.rdb.SRem(ctx, "room:members:"+c.RoomID, c.UserID)
 	h.rdb.Del(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID))
 	slog.Info("유저 퇴장", "userId", c.UserID, "roomId", c.RoomID)
+}
+
+func (h *Handler) cleanupAgent(agentID string) {
+	req, err := http.NewRequest(http.MethodDelete,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agentID, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+	resp, _ := h.hc.Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	slog.Info("고아 에이전트 정리", "agentId", agentID)
 }
 
 func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte) {
@@ -231,6 +252,10 @@ func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte)
 		h.handleChat(ctx, c, msg)
 	case "ping":
 		h.handlePing(ctx, c)
+	case "summon_agent":
+		h.handleSummonAgent(ctx, c, msg)
+	case "dismiss_agent":
+		h.handleDismissAgent(ctx, c)
 	default:
 		sendError(c, "UNKNOWN_EVENT", "알 수 없는 이벤트입니다.")
 	}
@@ -273,6 +298,161 @@ func (h *Handler) handleChat(ctx context.Context, c *hub.Client, msg model.Clien
 		Content: msg.Content, CreatedAt: record.CreatedAt,
 	})
 	h.hub.Publish(ctx, c.RoomID, broadcast)
+
+	// 에이전트가 활성 상태이면 메시지를 전달하고 응답 스트리밍
+	if agent := h.hub.GetAgent(c.RoomID); agent != nil {
+		go h.streamAgentResponse(agent.AgentID, c.RoomID, c.UserID, c.Nickname, msg.Content)
+	}
+}
+
+func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
+	if h.hub.HasAgent(c.RoomID) {
+		sendError(c, "AGENT_ALREADY_EXISTS", "이미 에이전트가 소환되어 있습니다.")
+		return
+	}
+
+	role := msg.Role
+	if role == "" {
+		role = "helper"
+	}
+
+	body, _ := json.Marshal(map[string]any{"roomId": c.RoomID, "role": role})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions", bytes.NewReader(body))
+	if err != nil {
+		sendError(c, "INTERNAL_ERROR", "에이전트 소환에 실패했습니다.")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+
+	resp, err := h.hc.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		slog.Error("에이전트 소환 실패", "err", err, "roomId", c.RoomID)
+		sendError(c, "INTERNAL_ERROR", "에이전트 소환에 실패했습니다.")
+		return
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		AgentID  string  `json:"agentId"`
+		X        float64 `json:"x"`
+		Y        float64 `json:"y"`
+		Nickname string  `json:"nickname"`
+		Role     string  `json:"role"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		sendError(c, "INTERNAL_ERROR", "에이전트 응답 파싱 실패.")
+		return
+	}
+
+	agentCtx, cancelFn := context.WithCancel(context.Background())
+	h.hub.SetAgent(c.RoomID, &hub.AgentState{AgentID: result.AgentID, CancelFn: cancelFn})
+	_ = agentCtx // 향후 스트리밍 중단에 사용
+
+	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.AgentJoinedEvent{
+		Type:     "agent_joined",
+		AgentID:  result.AgentID,
+		Role:     result.Role,
+		Nickname: result.Nickname,
+		X:        result.X,
+		Y:        result.Y,
+	}))
+	slog.Info("에이전트 소환", "agentId", result.AgentID, "roomId", c.RoomID, "role", result.Role)
+}
+
+func (h *Handler) handleDismissAgent(ctx context.Context, c *hub.Client) {
+	agent := h.hub.GetAgent(c.RoomID)
+	if agent == nil {
+		sendError(c, "NO_AGENT", "소환된 에이전트가 없습니다.")
+		return
+	}
+
+	agent.CancelFn()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agent.AgentID, nil)
+	if err == nil {
+		req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+		resp, _ := h.hc.Do(req)
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
+	h.hub.ClearAgent(c.RoomID)
+	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.AgentLeftEvent{
+		Type:    "agent_left",
+		AgentID: agent.AgentID,
+	}))
+	slog.Info("에이전트 퇴장", "agentId", agent.AgentID, "roomId", c.RoomID)
+}
+
+func (h *Handler) streamAgentResponse(agentID, roomID string, userID int64, nickname, content string) {
+	body, _ := json.Marshal(map[string]any{
+		"userId":   userID,
+		"nickname": nickname,
+		"content":  content,
+	})
+	req, err := http.NewRequest(http.MethodPost,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agentID+"/message",
+		bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+
+	resp, err := h.agentC.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		slog.Error("에이전트 메시지 요청 실패", "err", err, "agentId", agentID)
+		return
+	}
+	defer resp.Body.Close()
+
+	buf := make([]byte, 4096)
+	leftover := ""
+	ctx := context.Background()
+
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			chunk := leftover + string(buf[:n])
+			leftover = ""
+			lines := strings.Split(chunk, "\n")
+			for i, line := range lines {
+				if i == len(lines)-1 {
+					leftover = line
+					continue
+				}
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+				payload := line[6:]
+				var event struct {
+					Content string `json:"content"`
+					Done    bool   `json:"done"`
+					Error   string `json:"error"`
+				}
+				if json.Unmarshal([]byte(payload), &event) != nil {
+					continue
+				}
+				h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
+					Type:    "agent_message",
+					AgentID: agentID,
+					Content: event.Content,
+					Done:    event.Done,
+				}))
+				if event.Done {
+					return
+				}
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (h *Handler) handlePing(ctx context.Context, c *hub.Client) {

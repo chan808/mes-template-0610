@@ -6,8 +6,14 @@
 |---|---|---|---|
 | agolive-api | Kotlin/Spring | 8080 | 인증, CRUD, 내부 토큰 검증 |
 | agolive-realtime | Go | 8081 | WebSocket, 위치 동기화, 브로드캐스트 |
+| agolive-agent | Python/FastAPI | 8082 | AI 에이전트 세션 관리, Claude API 스트리밍 |
 
-내부 통신: `POST /internal/auth/verify` (Go → Spring, 외부 차단)
+내부 통신:
+- `POST /internal/auth/verify` (Go → Spring, 외부 차단)
+- `POST /internal/agent/sessions` (Go → Agent, 에이전트 소환)
+- `POST /internal/agent/sessions/{id}/message` (Go → Agent, SSE 스트리밍)
+- `DELETE /internal/agent/sessions/{id}` (Go → Agent, 에이전트 퇴장)
+- `GET /internal/rooms/{id}/messages/context` (Agent → Spring, 최근 채팅 컨텍스트)
 
 ---
 
@@ -118,10 +124,22 @@ GET /health
 ### agolive-realtime 내부 API (Spring 호출)
 
 ```
-POST /internal/auth/verify              -- JWT 검증 + 유저 정보 반환 (Authorization 헤더 필요)
-GET  /internal/rooms/{roomId}           -- 방 정보 조회 (maxCapacity, status)
-POST /internal/rooms/{roomId}/messages  -- 메시지 저장
+POST /internal/auth/verify                      -- JWT 검증 + 유저 정보 반환 (Authorization 헤더 필요)
+GET  /internal/rooms/{roomId}                   -- 방 정보 조회 (maxCapacity, status)
+POST /internal/rooms/{roomId}/messages          -- 메시지 저장
+GET  /internal/rooms/{roomId}/messages/context  -- 최근 채팅 컨텍스트 (에이전트용)
 ```
+
+### agolive-agent 내부 API
+
+```
+POST   /internal/agent/sessions                       -- 에이전트 소환 (roomId, role)
+POST   /internal/agent/sessions/{agentId}/message     -- SSE: 사용자 메시지 → 에이전트 응답 스트리밍
+DELETE /internal/agent/sessions/{agentId}             -- 에이전트 퇴장/취소
+GET    /health
+```
+
+모든 내부 API는 `X-Internal-Secret` 헤더로 인증.
 
 ---
 
@@ -129,17 +147,22 @@ POST /internal/rooms/{roomId}/messages  -- 메시지 저장
 
 ```
 client → server
-  move    {x, y}
-  chat    {content}
-  ping    {}
+  move          {x, y}
+  chat          {content}
+  ping          {}
+  summon_agent  {role: "helper"|"summarizer"}
+  dismiss_agent {}
 
 server → client
-  presence  {userId, x, y, nickname, avatarId}
-  chat      {messageId, userId, content, createdAt}
-  join      {userId, nickname}
-  leave     {userId}
-  pong      {}
-  error     {code, message}
+  presence      {userId, x, y, nickname, avatarId}
+  chat          {messageId, userId, content, createdAt}
+  join          {userId, nickname}
+  leave         {userId}
+  pong          {}
+  error         {code, message}
+  agent_joined  {agentId, role, nickname, x, y}
+  agent_left    {agentId}
+  agent_message {agentId, content, done}
 ```
 
 ---
@@ -220,15 +243,26 @@ RFC 7807 ProblemDetail 형식. 프론트엔드는 `title`(에러 코드)과 `det
 
 ---
 
-## Agent Architecture (Phase 2+)
+## Agent Architecture (Phase 2)
 
-2차부터 추가될 에이전트 서버 구조 (설계 예정)
+agolive-agent (Python/FastAPI) — 구현 완료
 
-agolive-agent (Python/FastAPI 예정)
-- 단일/멀티 에이전트 실행 및 상태 관리
-- Claude API tool use 기반 도구 실행
-- Human-in-the-loop 인터럽트 처리
-- 에이전트 응답 스트리밍 → Go 실시간 서버 경유 → 클라이언트
+- 방 당 에이전트 1개 (role: helper | summarizer)
+- 에이전트 세션 in-memory 관리 (agentId → AgentSession)
+- 소환 시 최근 채팅 컨텍스트를 Spring에서 로드하여 system prompt에 반영
+- 사용자 메시지마다 Claude Haiku로 SSE 스트리밍 응답
+- 대화 히스토리 최대 40턴 유지
+- 마지막 클라이언트 퇴장 시 에이전트 자동 정리
 
-에이전트 상태: idle / running / paused / done
-파일 생성 결과물은 S3 저장 후 다운로드 URL 제공
+**에이전트 소환 플로우**
+```
+client summon_agent → Go → POST /internal/agent/sessions
+  → agent_joined 브로드캐스트 (아바타 위치 포함)
+user chat → Go → 메시지 저장/브로드캐스트 →
+  POST /internal/agent/sessions/{id}/message (SSE)
+  → agent_message 청크 브로드캐스트 (streaming: true → done: true)
+client dismiss_agent → Go → DELETE /internal/agent/sessions/{id}
+  → agent_left 브로드캐스트
+```
+
+**Phase 3 예정**: 멀티 에이전트, Human-in-the-loop, tool use, S3 파일 결과물

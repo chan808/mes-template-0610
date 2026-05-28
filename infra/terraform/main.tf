@@ -165,7 +165,7 @@ resource "aws_eip_association" "app" {
 
 # ── ECR 레포지토리 ──────────────────────────────────────────────
 locals {
-  ecr_repos = ["agolive-api", "agolive-realtime", "agolive-frontend"]
+  ecr_repos = ["agolive-api", "agolive-realtime", "agolive-frontend", "agolive-agent"]
 }
 
 resource "aws_ecr_repository" "app" {

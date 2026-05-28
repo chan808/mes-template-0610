@@ -33,7 +33,7 @@ function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUs
 
         {/* 사이드바: 접속자 목록 + 채팅 */}
         <aside className="flex w-80 shrink-0 flex-col gap-3 border-l border-border p-3">
-          <MemberList myUserId={myUserId} myNickname={myNickname} />
+          <MemberList myUserId={myUserId} myNickname={myNickname} onSend={send} />
           <div className="flex-1 min-h-0">
             <ChatPanel roomId={roomId} myUserId={myUserId} onSend={send} />
           </div>

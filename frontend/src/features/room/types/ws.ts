@@ -2,7 +2,9 @@
 export type ClientMessage =
   | { type: "move"; x: number; y: number }
   | { type: "chat"; content: string }
-  | { type: "ping" };
+  | { type: "ping" }
+  | { type: "summon_agent"; role: "helper" | "summarizer" }
+  | { type: "dismiss_agent" };
 
 // 서버 → 클라이언트 메시지
 export type ServerMessage =
@@ -11,7 +13,10 @@ export type ServerMessage =
   | { type: "join"; userId: number; nickname: string }
   | { type: "leave"; userId: number }
   | { type: "pong" }
-  | { type: "error"; code: string; message: string };
+  | { type: "error"; code: string; message: string }
+  | { type: "agent_joined"; agentId: string; role: string; nickname: string; x: number; y: number }
+  | { type: "agent_left"; agentId: string }
+  | { type: "agent_message"; agentId: string; content: string; done: boolean };
 
 export type WsStatus = "disconnected" | "connecting" | "connected" | "error";
 
@@ -23,7 +28,16 @@ export interface PresenceEntry {
   avatarId: number | null;
 }
 
+export interface AgentEntry {
+  agentId: string;
+  role: string;
+  nickname: string;
+  x: number;
+  y: number;
+}
+
 // 채팅 패널에서 사용하는 통합 메시지 타입
 export type DisplayMessage =
   | { id: string; type: "chat"; userId: number; nickname: string; content: string; createdAt: string }
-  | { id: string; type: "system"; content: string; createdAt: string };
+  | { id: string; type: "system"; content: string; createdAt: string }
+  | { id: string; type: "agent"; agentId: string; nickname: string; content: string; createdAt: string; streaming: boolean };

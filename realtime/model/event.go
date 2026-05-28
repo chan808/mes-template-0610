@@ -6,6 +6,7 @@ type ClientMessage struct {
 	X       *float64 `json:"x"`
 	Y       *float64 `json:"y"`
 	Content string   `json:"content"`
+	Role    string   `json:"role"` // summon_agent에서 사용
 }
 
 // 서버 → 클라이언트 (flat, per-type structs)
@@ -46,4 +47,25 @@ type ErrorEvent struct {
 	Type    string `json:"type"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type AgentJoinedEvent struct {
+	Type     string  `json:"type"`
+	AgentID  string  `json:"agentId"`
+	Role     string  `json:"role"`
+	Nickname string  `json:"nickname"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+}
+
+type AgentLeftEvent struct {
+	Type    string `json:"type"`
+	AgentID string `json:"agentId"`
+}
+
+type AgentMessageEvent struct {
+	Type    string `json:"type"`
+	AgentID string `json:"agentId"`
+	Content string `json:"content"`
+	Done    bool   `json:"done"`
 }

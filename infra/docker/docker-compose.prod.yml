@@ -76,6 +76,7 @@ services:
     environment:
       REDIS_ADDR: redis:6379
       INTERNAL_API_URL: http://agolive-nginx:8090
+      AGENT_API_URL: http://agolive-agent:8082
       PORT: "8081"
     depends_on:
       redis:
@@ -96,12 +97,29 @@ services:
     environment:
       REDIS_ADDR: redis:6379
       INTERNAL_API_URL: http://agolive-nginx:8090
+      AGENT_API_URL: http://agolive-agent:8082
       PORT: "8081"
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agolive-net
+
+  # ── AI Agent (B/G 불필요, stateless) ─────────────────────────
+  agent:
+    image: ${ECR_REGISTRY}/agolive-agent:${AGENT_IMAGE_TAG:-latest}
+    container_name: agolive-agent
+    restart: unless-stopped
+    env_file: /opt/agolive/.env
+    environment:
+      SPRING_API_URL: http://agolive-nginx:8090
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

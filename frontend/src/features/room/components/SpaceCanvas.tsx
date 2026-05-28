@@ -24,7 +24,7 @@ interface SpaceCanvasProps {
 
 export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanvasProps) {
   const send = onSend;
-  const { presences, myPosition, setMyPosition } = usePresenceStore();
+  const { presences, agents, myPosition, setMyPosition } = usePresenceStore();
 
   const pressedKeysRef = useRef<Set<string>>(new Set());
   const lastSendRef = useRef<number>(0);
@@ -75,11 +75,14 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
 
   const allAvatars = [
     // 내 아바타
-    { userId: myUserId, x: myPosition.x, y: myPosition.y, nickname: myNickname, avatarId: null, isMe: true },
+    { key: `user-${myUserId}`, x: myPosition.x, y: myPosition.y, nickname: myNickname, colorSeed: myUserId, isMe: true, isAgent: false },
     // 다른 유저 아바타
     ...[...presences.values()]
       .filter((p) => p.userId !== myUserId)
-      .map((p) => ({ ...p, isMe: false })),
+      .map((p) => ({ key: `user-${p.userId}`, x: p.x, y: p.y, nickname: p.nickname, colorSeed: p.avatarId ?? p.userId, isMe: false, isAgent: false })),
+    // 에이전트 아바타
+    ...[...agents.values()]
+      .map((a) => ({ key: `agent-${a.agentId}`, x: a.x, y: a.y, nickname: a.nickname, colorSeed: 0, isMe: false, isAgent: true })),
   ];
 
   return (
@@ -103,7 +106,7 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
       {/* 아바타 렌더링 */}
       {allAvatars.map((avatar) => (
         <div
-          key={avatar.userId}
+          key={avatar.key}
           className="absolute flex flex-col items-center"
           style={{
             transform: `translate(${avatar.x - AVATAR_SIZE / 2}px, ${avatar.y - AVATAR_SIZE / 2}px)`,
@@ -116,11 +119,15 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
             style={{
               width: AVATAR_SIZE,
               height: AVATAR_SIZE,
-              backgroundColor: getAvatarColor(avatar.avatarId ?? avatar.userId),
-              boxShadow: avatar.isMe ? `0 0 0 2px #fff, 0 0 0 4px ${getAvatarColor(avatar.userId)}` : undefined,
+              backgroundColor: avatar.isAgent ? "#7c3aed" : getAvatarColor(avatar.colorSeed),
+              boxShadow: avatar.isMe
+                ? `0 0 0 2px #fff, 0 0 0 4px ${getAvatarColor(avatar.colorSeed)}`
+                : avatar.isAgent
+                  ? "0 0 0 2px #fff, 0 0 0 4px #7c3aed, 0 0 12px #7c3aed88"
+                  : undefined,
             }}
           >
-            {avatar.nickname.charAt(0).toUpperCase()}
+            {avatar.isAgent ? "AI" : avatar.nickname.charAt(0).toUpperCase()}
           </div>
           <span className="mt-1 max-w-[80px] truncate rounded px-1 text-xs text-white/90 backdrop-blur-sm">
             {avatar.nickname}

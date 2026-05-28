@@ -28,7 +28,6 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
     const el = listRef.current;
     if (!el) return;
 
-    // 기존 마지막 메시지 id 기준 — 처음 렌더 or 하단 근처면 스크롤
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     if (!lastMessageIdRef.current || isNearBottom) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,6 +78,25 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
                 <span className="rounded-full bg-muted px-3 py-0.5 text-xs text-muted-foreground">
                   {msg.content}
                 </span>
+              </div>
+            );
+          }
+
+          if (msg.type === "agent") {
+            return (
+              <div key={msg.id} className="flex flex-col gap-0.5 items-start">
+                <span className="px-1 text-xs font-medium text-violet-400">{msg.nickname}</span>
+                <div className="flex items-end gap-1 flex-row">
+                  <div className="max-w-[200px] rounded-2xl rounded-bl-sm bg-violet-950 border border-violet-800 px-3 py-2 text-sm break-words text-violet-100">
+                    {msg.content}
+                    {msg.streaming && <span className="ml-1 inline-block animate-pulse">▋</span>}
+                  </div>
+                  {!msg.streaming && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {formatTime(msg.createdAt)}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           }

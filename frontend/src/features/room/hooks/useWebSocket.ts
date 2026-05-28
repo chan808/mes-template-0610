@@ -20,8 +20,8 @@ export function useWebSocket(roomId: number) {
   const unmountedRef = useRef(false);
 
   const { setStatus, setWs, reset } = useWsStore();
-  const { upsertPresence, removePresence, cacheNickname, getNickname, clear: clearPresence } = usePresenceStore();
-  const { appendMessage, clear: clearChat } = useChatStore();
+  const { upsertPresence, removePresence, cacheNickname, getNickname, upsertAgent, removeAgent, clear: clearPresence } = usePresenceStore();
+  const { appendMessage, appendAgentChunk, clear: clearChat } = useChatStore();
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -78,12 +78,41 @@ export function useWebSocket(roomId: number) {
           break;
         }
 
+        case "agent_joined":
+          upsertAgent({ agentId: msg.agentId, role: msg.role, nickname: msg.nickname, x: msg.x, y: msg.y });
+          appendMessage({
+            id: `agent-join-${msg.agentId}`,
+            type: "system",
+            content: `${msg.nickname}이(가) 소환되었습니다.`,
+            createdAt: new Date().toISOString(),
+          });
+          break;
+
+        case "agent_left": {
+          const agent = usePresenceStore.getState().agents.get(msg.agentId);
+          const agentName = agent?.nickname ?? "AI 에이전트";
+          removeAgent(msg.agentId);
+          appendMessage({
+            id: `agent-leave-${msg.agentId}-${Date.now()}`,
+            type: "system",
+            content: `${agentName}이(가) 퇴장했습니다.`,
+            createdAt: new Date().toISOString(),
+          });
+          break;
+        }
+
+        case "agent_message": {
+          const agent = usePresenceStore.getState().agents.get(msg.agentId);
+          appendAgentChunk(msg.agentId, agent?.nickname ?? "AI", msg.content, msg.done);
+          break;
+        }
+
         case "error":
           toast.error(`서버 오류: ${msg.message}`);
           break;
       }
     },
-    [upsertPresence, removePresence, cacheNickname, getNickname, appendMessage],
+    [upsertPresence, removePresence, cacheNickname, getNickname, appendMessage, appendAgentChunk, upsertAgent, removeAgent],
   );
 
   const startPing = useCallback((ws: WebSocket) => {

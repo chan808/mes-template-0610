@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { PresenceEntry } from "../types/ws";
+import { AgentEntry, PresenceEntry } from "../types/ws";
 
 const CANVAS_WIDTH = 1200;
 const CANVAS_HEIGHT = 800;
@@ -7,6 +7,7 @@ const AVATAR_SIZE = 40;
 
 interface PresenceState {
   presences: Map<number, PresenceEntry>;
+  agents: Map<string, AgentEntry>;
   // presence/join 이벤트로 수집한 닉네임 캐시 — removePresence 후에도 유지
   nicknameCache: Map<number, string>;
   myPosition: { x: number; y: number };
@@ -15,11 +16,14 @@ interface PresenceState {
   setMyPosition: (x: number, y: number) => void;
   cacheNickname: (userId: number, nickname: string) => void;
   getNickname: (userId: number) => string;
+  upsertAgent: (entry: AgentEntry) => void;
+  removeAgent: (agentId: string) => void;
   clear: () => void;
 }
 
 export const usePresenceStore = create<PresenceState>((set, get) => ({
   presences: new Map(),
+  agents: new Map(),
   nicknameCache: new Map(),
   myPosition: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
 
@@ -58,9 +62,24 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   getNickname: (userId) =>
     get().nicknameCache.get(userId) ?? "알 수 없음",
 
+  upsertAgent: (entry) =>
+    set((state) => {
+      const next = new Map(state.agents);
+      next.set(entry.agentId, entry);
+      return { agents: next };
+    }),
+
+  removeAgent: (agentId) =>
+    set((state) => {
+      const next = new Map(state.agents);
+      next.delete(agentId);
+      return { agents: next };
+    }),
+
   clear: () =>
     set({
       presences: new Map(),
+      agents: new Map(),
       nicknameCache: new Map(),
       myPosition: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
     }),

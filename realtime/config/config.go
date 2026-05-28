@@ -15,6 +15,7 @@ type Config struct {
 	InternalAPIURL string
 	InternalSecret string
 	AllowedOrigin  string
+	AgentAPIURL    string
 }
 
 func Load() *Config {
@@ -29,6 +30,7 @@ func Load() *Config {
 		InternalAPIURL: getEnv("INTERNAL_API_URL", "http://localhost:8080"),
 		InternalSecret: mustEnv("INTERNAL_SECRET"),
 		AllowedOrigin:  getEnv("CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
+		AgentAPIURL:    getEnv("AGENT_API_URL", "http://localhost:8082"),
 	}
 }
 

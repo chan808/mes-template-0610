@@ -39,6 +39,11 @@ class MessageService(
         )
     }
 
+    override fun getRecentMessages(roomId: Long, limit: Int): List<MessageRecord> =
+        messageRepository.findByRoomIdOrderByIdDesc(roomId, PageRequest.of(0, limit))
+            .reversed()
+            .map { MessageRecord(it.id, it.roomId, it.userId, it.content, it.type, it.createdAt) }
+
     @Transactional
     override fun save(roomId: Long, userId: Long?, content: String, type: MessageType): MessageRecord {
         val message = messageRepository.save(Message(roomId = roomId, userId = userId, content = content, type = type))

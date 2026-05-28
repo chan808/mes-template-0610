@@ -1,6 +1,6 @@
 #!/bin/bash
 # Blue/Green 배포 스크립트
-# 사용법: deploy.sh <api|realtime|frontend> <image-tag>
+# 사용법: deploy.sh <api|realtime|frontend|agent> <image-tag>
 set -e
 
 APP_DIR="/opt/agolive"
@@ -8,7 +8,7 @@ COMPOSE="docker compose --env-file ${APP_DIR}/.env -f ${APP_DIR}/infra/docker/do
 CONF_D="${APP_DIR}/infra/docker/nginx/conf.d"
 NGINX="agolive-nginx"
 
-SERVICE="${1:?사용법: deploy.sh <api|realtime|frontend> <image-tag>}"
+SERVICE="${1:?사용법: deploy.sh <api|realtime|frontend|agent> <image-tag>}"
 TAG="${2:?사용법: deploy.sh <api|realtime|frontend> <image-tag>}"
 
 # .env 로드
@@ -93,25 +93,23 @@ deploy_blue_green() {
     echo "배포 완료: ${active} → ${inactive}"
 }
 
-# Frontend 단순 재배포 (B/G 불필요)
-deploy_frontend() {
-    local tag="$1"
-    echo "Frontend 배포: tag=${tag}"
-
-    sed -i "s|^FRONTEND_IMAGE_TAG=.*|FRONTEND_IMAGE_TAG=${tag}|" "${APP_DIR}/.env"
-    set -a; source "${APP_DIR}/.env"; set +a
-
-    $COMPOSE pull frontend
-    $COMPOSE up -d --no-deps frontend
-    echo "Frontend 배포 완료"
-}
-
 # 실행
 ecr_login
 
+deploy_simple() {
+    local svc="$1" tag="$2" tag_env_key="$3"
+    echo "${svc} 배포: tag=${tag}"
+    sed -i "s|^${tag_env_key}=.*|${tag_env_key}=${tag}|" "${APP_DIR}/.env"
+    set -a; source "${APP_DIR}/.env"; set +a
+    $COMPOSE pull "${svc}"
+    $COMPOSE up -d --no-deps "${svc}"
+    echo "${svc} 배포 완료"
+}
+
 case "$SERVICE" in
     api|realtime) deploy_blue_green "$SERVICE" "$TAG" ;;
-    frontend)     deploy_frontend "$TAG" ;;
+    frontend)     deploy_simple "frontend" "$TAG" "FRONTEND_IMAGE_TAG" ;;
+    agent)        deploy_simple "agent"    "$TAG" "AGENT_IMAGE_TAG" ;;
     *)
         echo "ERROR: 알 수 없는 서비스: ${SERVICE}"
         exit 1

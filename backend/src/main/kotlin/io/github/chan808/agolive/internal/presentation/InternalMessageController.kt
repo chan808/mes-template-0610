@@ -9,13 +9,15 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
-// Go 실시간 서버 전용 — Nginx에서 외부 접근 차단
+// Go 실시간 서버 / AI 에이전트 전용 — Nginx에서 외부 접근 차단
 @RestController
 @RequestMapping("/internal/rooms/{roomId}/messages")
 class InternalMessageController(private val messageApi: MessageApi) {
@@ -27,6 +29,15 @@ class InternalMessageController(private val messageApi: MessageApi) {
     ): ResponseEntity<ApiResponse<MessageRecord>> {
         val record = messageApi.save(roomId, request.userId, request.content, request.type)
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(record))
+    }
+
+    @GetMapping("/context")
+    fun getContext(
+        @PathVariable roomId: Long,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): ResponseEntity<ApiResponse<List<MessageRecord>>> {
+        val messages = messageApi.getRecentMessages(roomId, limit.coerceIn(1, 50))
+        return ResponseEntity.ok(ApiResponse.of(messages))
     }
 }
 

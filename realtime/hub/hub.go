@@ -45,9 +45,15 @@ func (c *Client) SignalDone() {
 	c.doneOnce.Do(func() { close(c.done) })
 }
 
+type AgentState struct {
+	AgentID  string
+	CancelFn context.CancelFunc
+}
+
 type roomState struct {
 	clients map[*Client]bool
 	ps      *redis.PubSub
+	agent   *AgentState
 }
 
 type Hub struct {
@@ -78,27 +84,70 @@ func (h *Hub) Join(c *Client) {
 	wsActiveConnections.Inc()
 }
 
-// Leave는 클라이언트를 룸에서 제거하고 마지막 퇴장 시 Redis Pub/Sub 구독을 해제한다
-func (h *Hub) Leave(c *Client) {
+// Leave는 클라이언트를 룸에서 제거한다.
+// 마지막 클라이언트 퇴장으로 룸이 비워지면서 에이전트가 있었다면 해당 AgentState를 반환한다.
+func (h *Hub) Leave(c *Client) *AgentState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	r, ok := h.rooms[c.RoomID]
 	if !ok {
-		return
+		return nil
 	}
 	delete(r.clients, c)
 	c.SignalDone()
 	wsActiveConnections.Dec()
 	if len(r.clients) == 0 {
+		orphaned := r.agent
 		r.ps.Close()
 		delete(h.rooms, c.RoomID)
+		return orphaned
 	}
+	return nil
 }
 
 // Publish는 룸 채널에 메시지를 발행한다
 func (h *Hub) Publish(ctx context.Context, roomID string, data []byte) {
 	h.rdb.Publish(ctx, "room:"+roomID, string(data))
+}
+
+// SetAgent는 룸에 에이전트 세션을 등록한다
+func (h *Hub) SetAgent(roomID string, state *AgentState) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r, ok := h.rooms[roomID]
+	if ok {
+		r.agent = state
+	}
+}
+
+// GetAgent는 룸의 에이전트 세션을 반환한다
+func (h *Hub) GetAgent(roomID string) *AgentState {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if r, ok := h.rooms[roomID]; ok {
+		return r.agent
+	}
+	return nil
+}
+
+// ClearAgent는 룸의 에이전트 세션을 제거한다
+func (h *Hub) ClearAgent(roomID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r, ok := h.rooms[roomID]; ok {
+		r.agent = nil
+	}
+}
+
+// HasAgent는 룸에 에이전트가 있는지 확인한다
+func (h *Hub) HasAgent(roomID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if r, ok := h.rooms[roomID]; ok {
+		return r.agent != nil
+	}
+	return false
 }
 
 func (h *Hub) startSubscriber(roomID string, r *roomState) {
