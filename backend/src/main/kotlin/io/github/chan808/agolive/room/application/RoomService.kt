@@ -81,7 +81,7 @@ class RoomService(
 
     override fun getActiveRoomInfo(roomId: Long): RoomInfo? {
         val room = roomRepository.findByIdAndDeletedAtIsNull(roomId) ?: return null
-        return RoomInfo(room.id, room.maxCapacity, room.status.name)
+        return RoomInfo(room.id, room.maxCapacity, room.status.name, room.isPrivate, room.ownerId)
     }
 
     private fun require(roomId: Long): Room =

@@ -21,8 +21,9 @@ class MessageService(
     private val roomApi: RoomApi,
 ) : MessageApi {
 
-    fun list(roomId: Long, beforeId: Long?, limit: Int): MessageCursorResponse {
-        if (!roomApi.existsActiveRoom(roomId)) throw RoomException(ErrorCode.ROOM_NOT_FOUND)
+    fun list(roomId: Long, beforeId: Long?, limit: Int, userId: Long): MessageCursorResponse {
+        val room = roomApi.getActiveRoomInfo(roomId) ?: throw RoomException(ErrorCode.ROOM_NOT_FOUND)
+        if (room.isPrivate && room.ownerId != userId) throw RoomException(ErrorCode.ACCESS_DENIED)
         val pageRequest = PageRequest.of(0, limit + 1)
         val messages = if (beforeId != null) {
             messageRepository.findByRoomIdAndIdLessThanOrderByIdDesc(roomId, beforeId, pageRequest)

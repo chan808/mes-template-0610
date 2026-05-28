@@ -11,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.core.StringRedisTemplate
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -18,7 +19,8 @@ import kotlin.test.assertNull
 class RoomServiceTest {
 
     private val roomRepository: RoomRepository = mockk()
-    private val roomService = RoomService(roomRepository)
+    private val redisTemplate: StringRedisTemplate = mockk()
+    private val roomService = RoomService(roomRepository, redisTemplate)
 
     private fun room(id: Long = 1L, ownerId: Long = 10L) = Room(
         name = "테스트 방",

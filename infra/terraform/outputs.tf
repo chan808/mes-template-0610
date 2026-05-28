@@ -12,3 +12,8 @@ output "gha_role_arn" {
   value       = aws_iam_role.gha_ecr_push.arn
   description = "GitHub Actions OIDC 역할 ARN (GitHub Secret AWS_ROLE_ARN에 등록)"
 }
+
+output "ec2_instance_id" {
+  value       = aws_instance.app.id
+  description = "EC2 인스턴스 ID (GitHub Variable EC2_INSTANCE_ID에 등록)"
+}

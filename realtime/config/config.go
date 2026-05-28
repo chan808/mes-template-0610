@@ -14,6 +14,7 @@ type Config struct {
 	RedisPassword  string
 	InternalAPIURL string
 	InternalSecret string
+	AllowedOrigin  string
 }
 
 func Load() *Config {
@@ -27,6 +28,7 @@ func Load() *Config {
 		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
 		InternalAPIURL: getEnv("INTERNAL_API_URL", "http://localhost:8080"),
 		InternalSecret: mustEnv("INTERNAL_SECRET"),
+		AllowedOrigin:  getEnv("CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
 	}
 }
 

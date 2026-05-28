@@ -10,4 +10,6 @@ data class RoomInfo(
     val id: Long,
     val maxCapacity: Int,
     val status: String,
+    val isPrivate: Boolean,
+    val ownerId: Long,
 )

@@ -75,7 +75,7 @@ services:
     env_file: /opt/agolive/.env
     environment:
       REDIS_ADDR: redis:6379
-      INTERNAL_API_URL: http://api-blue:8080
+      INTERNAL_API_URL: http://agolive-nginx:8090
       PORT: "8081"
     depends_on:
       redis:
@@ -95,7 +95,7 @@ services:
     env_file: /opt/agolive/.env
     environment:
       REDIS_ADDR: redis:6379
-      INTERNAL_API_URL: http://api-green:8080
+      INTERNAL_API_URL: http://agolive-nginx:8090
       PORT: "8081"
     depends_on:
       redis:

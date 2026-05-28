@@ -93,7 +93,9 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// WebSocket 업그레이드
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{h.cfg.AllowedOrigin},
+	})
 	if err != nil {
 		return
 	}
@@ -165,32 +167,40 @@ func (h *Handler) enter(ctx context.Context, c *hub.Client) {
 }
 
 func (h *Handler) sendExistingPresences(ctx context.Context, c *hub.Client) {
-	keys, err := h.rdb.Keys(ctx, fmt.Sprintf("presence:%s:*", c.RoomID)).Result()
-	if err != nil || len(keys) == 0 {
-		return
-	}
-	for _, key := range keys {
-		parts := strings.Split(key, ":")
-		userID, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
-		if err != nil || userID == c.UserID {
-			continue
-		}
-		val, err := h.rdb.Get(ctx, key).Result()
+	pattern := fmt.Sprintf("presence:%s:*", c.RoomID)
+	var cursor uint64
+	for {
+		keys, next, err := h.rdb.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			continue
+			return
 		}
-		var p struct {
-			X        float64 `json:"x"`
-			Y        float64 `json:"y"`
-			Nickname string  `json:"nickname"`
-			AvatarID *int64  `json:"avatarId"`
+		for _, key := range keys {
+			parts := strings.Split(key, ":")
+			userID, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+			if err != nil || userID == c.UserID {
+				continue
+			}
+			val, err := h.rdb.Get(ctx, key).Result()
+			if err != nil {
+				continue
+			}
+			var p struct {
+				X        float64 `json:"x"`
+				Y        float64 `json:"y"`
+				Nickname string  `json:"nickname"`
+				AvatarID *int64  `json:"avatarId"`
+			}
+			if json.Unmarshal([]byte(val), &p) != nil {
+				continue
+			}
+			sendToClient(c, mustMarshal(model.PresenceEvent{
+				Type: "presence", UserID: userID, X: p.X, Y: p.Y, Nickname: p.Nickname, AvatarID: p.AvatarID,
+			}))
 		}
-		if json.Unmarshal([]byte(val), &p) != nil {
-			continue
+		if next == 0 {
+			return
 		}
-		sendToClient(c, mustMarshal(model.PresenceEvent{
-			Type: "presence", UserID: userID, X: p.X, Y: p.Y, Nickname: p.Nickname, AvatarID: p.AvatarID,
-		}))
+		cursor = next
 	}
 }
 

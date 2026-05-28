@@ -62,6 +62,19 @@ upstream realtime_active {
 }
 EOF
 
+# 내부 서비스용 (realtime → api). 외부 노출 없이 /internal/** 허용
+cat > "${CONF_D}/00-internal-server.conf" <<EOF
+server {
+    listen 8090;
+    location / {
+        proxy_pass         http://api_active;
+        proxy_set_header   Host            \$host;
+        proxy_set_header   X-Real-IP       \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
 cat > "${CONF_D}/default.conf" <<EOF
 server {
     listen 80;

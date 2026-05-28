@@ -38,6 +38,12 @@ variable "github_repo" {
   description = "GitHub 레포지토리명 (예: agolive)"
 }
 
+variable "ssh_allowed_cidr" {
+  type        = string
+  description = "SSH 허용 IP (예: 1.2.3.4/32). 비어있으면 SSH 포트를 열지 않음."
+  default     = ""
+}
+
 variable "tags" {
   type = map(string)
   default = {

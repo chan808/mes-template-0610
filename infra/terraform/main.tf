@@ -54,12 +54,15 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "ingress" {
+    for_each = var.ssh_allowed_cidr != "" ? [var.ssh_allowed_cidr] : []
+    content {
+      description = "SSH (내 IP만 허용)"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
   }
 
   egress {
@@ -104,6 +107,20 @@ resource "aws_iam_role_policy_attachment" "ec2_cw" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+resource "aws_iam_role_policy" "ec2_ssm_params" {
+  name = "ssm-params"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter", "ssm:GetParameters"]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/agolive/*"
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2-profile"
   role = aws_iam_role.ec2.name
@@ -119,6 +136,13 @@ resource "aws_instance" "app" {
   vpc_security_group_ids = [aws_security_group.ec2.id]
   key_name               = aws_key_pair.ec2.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  user_data = templatefile("${path.module}/user_data.sh", {
+    aws_region  = var.aws_region
+    github_org  = var.github_org
+    github_repo = var.github_repo
+  })
+  user_data_replace_on_change = true
 
   root_block_device {
     volume_size = var.ec2_volume_gb
@@ -155,6 +179,25 @@ resource "aws_ecr_repository" "app" {
   }
 
   tags = merge(var.tags, { Name = each.key })
+}
+
+# ── ECR 이미지 수명 주기 ────────────────────────────────────────
+resource "aws_ecr_lifecycle_policy" "app" {
+  for_each   = aws_ecr_repository.app
+  repository = each.value.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "최근 30개 이미지만 보관"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 30
+      }
+      action = { type = "expire" }
+    }]
+  })
 }
 
 # ── GitHub Actions OIDC ─────────────────────────────────────────
@@ -221,6 +264,30 @@ resource "aws_iam_role_policy" "gha_ecr_push" {
           for repo in local.ecr_repos :
           "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${repo}"
         ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "gha_ssm_deploy" {
+  name = "ssm-deploy"
+  role = aws_iam_role.gha_ecr_push.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation"]
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       }
     ]
   })

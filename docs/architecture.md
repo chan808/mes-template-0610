@@ -46,7 +46,9 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 | `ATV:{userId}` | String | 1h | Access Token Version 캐시 |
 | `LOCK:REISSUE:{sid}` | String | 3s | Reissue 동시 요청 방지 락 |
 | `RESET:{token}` | String | 30m | 비밀번호 재설정 토큰 |
-| `EMAIL_VERIFY_USER:{token}` | String | - | 이메일 인증 토큰 |
+| `EMAIL_VERIFY:{token}` | String | 24h | 이메일 인증 토큰 → userId |
+| `EMAIL_VERIFY_USER:{userId}` | String | 24h | userId → 인증 토큰 (중복 발송 방지 역조회) |
+| `OAUTH_CODE:{code}` | String | 60s | OAuth one-time code → AT (URL 직접 노출 방지) |
 
 ---
 
@@ -54,7 +56,7 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 
 | Module   | 책임 | 상태 |
 |----------|------|------|
-| auth     | 인증/인가, JWT 발급·검증, OAuth2, 토큰 블랙리스트 | 구현 완료 |
+| auth     | 인증/인가, JWT 발급·검증, OAuth2, RT 세션 관리, tokenVersion 기반 AT 무효화 | 구현 완료 |
 | user     | 사용자 프로필 조회·수정, 아바타 목록 | 구현 완료 |
 | room     | 방 생성·수정·삭제, 초대 토큰 관리, 소프트 삭제 스케줄러 | 구현 완료 |
 | message  | 채팅 기록 저장·커서 페이지 조회 | 구현 완료 |
@@ -84,7 +86,8 @@ POST   /api/auth/verify-email
 POST   /api/auth/verify-email/resend
 POST   /api/auth/password-reset/request
 POST   /api/auth/password-reset/confirm
-GET    /login/oauth2/code/{provider}       -- OAuth2 콜백
+GET    /login/oauth2/code/{provider}       -- OAuth2 콜백 (Spring Security 처리)
+GET    /api/auth/oauth2/token?code={code}  -- OAuth one-time code → AT 교환
 
 GET    /api/v1/users/me
 PATCH  /api/v1/users/me                   -- nickname, avatarId
@@ -143,11 +146,13 @@ server → client
 
 ## Auth Flow
 
-1. 로그인 → Spring 발급: Access(15m) + Refresh(7d, Redis 저장)
-2. WS 연결 → Go: JWT 로컬 검증 → Redis blacklist 확인 → `/internal/auth/verify`
-3. 로그아웃 → Spring: Redis `blacklist:token:{jti}` 기록
+1. 로그인 → Spring 발급: Access(30m) + Refresh(7d, Redis `RT:{sid}` 저장)
+2. WS 연결 → Go: JWT 로컬 서명 검증 → `/internal/auth/verify` (tokenVersion + 유저 정보 확인)
+3. 로그아웃 → Spring: Redis `RT:{sid}` 삭제 → 신규 AT 발급 불가
+   - 기존 AT는 만료 시(최대 30분)까지 stateless하게 유효 (JWT 구조상 즉시 무효화 불가)
+   - 비밀번호 변경 / 회원 탈퇴 시에만 tokenVersion 증가 → 발급된 모든 AT 즉시 무효화
 
-JWT claims: `sub(userId), nickname, avatarId, jti, iat, exp`
+JWT claims: `sub(userId), role, tokenVersion, iat, exp`
 
 ---
 
@@ -163,20 +168,30 @@ JWT claims: `sub(userId), nickname, avatarId, jti, iat, exp`
 
 ## Error Response
 
+RFC 7807 ProblemDetail 형식. 프론트엔드는 `title`(에러 코드)과 `detail`(메시지)을 읽는다.
+
 ```json
-{ "code": "ROOM_FULL", "message": "정원이 초과되었습니다." }
+{
+  "status": 409,
+  "title": "ROOM_FULL",
+  "detail": "정원이 초과되었습니다.",
+  "instance": "/api/v1/rooms/1"
+}
 ```
 
-| code | HTTP | 설명 |
-|------|------|------|
-| UNAUTHORIZED | 401 | 인증 실패 또는 토큰 만료 |
-| FORBIDDEN | 403 | 권한 없음 |
+| title | HTTP | 설명 |
+|-------|------|------|
+| UNAUTHENTICATED | 401 | 인증 실패 또는 토큰 없음 |
+| TOKEN_EXPIRED | 401 | 액세스 토큰 만료 |
+| TOKEN_INVALID | 401 | 유효하지 않은 토큰 |
+| ACCESS_DENIED | 403 | 권한 없음 |
 | ROOM_NOT_FOUND | 404 | 존재하지 않는 방 |
 | ROOM_FULL | 409 | 정원 초과 |
 | ROOM_CLOSED | 409 | 이미 닫힌 방 |
 | INVALID_INVITE_TOKEN | 400 | 유효하지 않은 초대 토큰 |
 | CAPACITY_BELOW_CURRENT | 400 | 현재 접속자 수보다 적은 정원으로 변경 시도 |
-| DUPLICATE_EMAIL | 409 | 이미 가입된 이메일 |
+| EMAIL_ALREADY_EXISTS | 409 | 이미 가입된 이메일 |
+| TOO_MANY_REQUESTS | 429 | 요청 횟수 초과, `Retry-After` 헤더 포함 |
 
 ---
 

@@ -1,4 +1,15 @@
+# ── 필수 값 ────────────────────────────────────────────────────
+# GitHub 사용자명 또는 조직명 (예: chan808)
+github_org = "your-github-username"
+
+# GitHub 레포지토리명 (예: agolive)
+github_repo = "agolive"
+
+# EC2 접속용 SSH 공개키 경로
+# 키가 없다면 먼저 생성: ssh-keygen -t ed25519 -f ~/.ssh/agolive_ec2
 ec2_public_key_path = "~/.ssh/agolive_ec2.pub"
 
-github_org  = "chan808"
-github_repo = "agolive"
+# ── 선택 값 ────────────────────────────────────────────────────
+# SSH 허용 IP: "1.2.3.4/32" 형식. 비워두면 SSH 포트 닫힘 (SSM으로 접속).
+# 내 IP 확인: curl ifconfig.me
+ssh_allowed_cidr = ""
