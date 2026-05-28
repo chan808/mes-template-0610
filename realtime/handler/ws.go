@@ -739,11 +739,16 @@ func (h *Handler) streamWorkerAndCollect(agentID, roomID, task string) string {
 
 // executeCreateDocument는 Python /internal/files 엔드포인트를 통해 파일을 S3에 업로드하고 URL을 반환한다.
 func (h *Handler) executeCreateDocument(ctx context.Context, agentID, roomID string, event sseEvent) string {
-	resp, err := h.hc.Post(
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		h.cfg.AgentAPIURL+"/internal/files",
-		"application/json",
-		bytes.NewReader(event.ToolInput),
-	)
+		bytes.NewReader(event.ToolInput))
+	if err != nil {
+		slog.Error("파일 생성 요청 오류", "agentId", agentID, "err", err)
+		return "파일 생성에 실패했습니다."
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+	resp, err := h.hc.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if resp != nil {
 			resp.Body.Close()
