@@ -7,6 +7,7 @@ import { roomApi } from "../api/roomApi";
 import SpaceCanvas from "./SpaceCanvas";
 import ChatPanel from "./ChatPanel";
 import MemberList from "./MemberList";
+import HumanInLoopDialog from "./HumanInLoopDialog";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { roomKeys } from "../hooks/useRooms";
 
@@ -18,28 +19,33 @@ function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUs
   const { send } = useWebSocket(roomId);
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* 상단 헤더 */}
-      <header className="flex items-center justify-between border-b border-border bg-card px-5 py-3">
-        <h1 className="text-base font-semibold">공간</h1>
-      </header>
+    <>
+      <div className="flex h-screen flex-col">
+        {/* 상단 헤더 */}
+        <header className="flex items-center justify-between border-b border-border bg-card px-5 py-3">
+          <h1 className="text-base font-semibold">공간</h1>
+        </header>
 
-      {/* 본문 레이아웃: 캔버스 + 사이드바 */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 캔버스 영역 (스크롤 가능) */}
-        <div className="flex-1 overflow-auto p-4">
-          <SpaceCanvas myUserId={myUserId} myNickname={myNickname} onSend={send} />
-        </div>
-
-        {/* 사이드바: 접속자 목록 + 채팅 */}
-        <aside className="flex w-80 shrink-0 flex-col gap-3 border-l border-border p-3">
-          <MemberList myUserId={myUserId} myNickname={myNickname} onSend={send} />
-          <div className="flex-1 min-h-0">
-            <ChatPanel roomId={roomId} myUserId={myUserId} onSend={send} />
+        {/* 본문 레이아웃: 캔버스 + 사이드바 */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* 캔버스 영역 (스크롤 가능) */}
+          <div className="flex-1 overflow-auto p-4">
+            <SpaceCanvas myUserId={myUserId} myNickname={myNickname} onSend={send} />
           </div>
-        </aside>
+
+          {/* 사이드바: 접속자 목록 + 채팅 */}
+          <aside className="flex w-80 shrink-0 flex-col gap-3 border-l border-border p-3">
+            <MemberList myUserId={myUserId} myNickname={myNickname} onSend={send} />
+            <div className="flex-1 min-h-0">
+              <ChatPanel roomId={roomId} myUserId={myUserId} onSend={send} />
+            </div>
+          </aside>
+        </div>
       </div>
-    </div>
+
+      {/* HitL 다이얼로그: 에이전트가 사용자 입력 요청 시 오버레이 표시 */}
+      <HumanInLoopDialog onSend={send} />
+    </>
   );
 }
 

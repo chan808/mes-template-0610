@@ -6,7 +6,9 @@ type ClientMessage struct {
 	X       *float64 `json:"x"`
 	Y       *float64 `json:"y"`
 	Content string   `json:"content"`
-	Role    string   `json:"role"` // summon_agent에서 사용
+	Role    string   `json:"role"`    // summon_agent
+	AgentID string   `json:"agentId"` // dismiss_agent, agent_input
+	Response string  `json:"response"` // agent_input
 }
 
 // 서버 → 클라이언트 (flat, per-type structs)
@@ -68,4 +70,29 @@ type AgentMessageEvent struct {
 	AgentID string `json:"agentId"`
 	Content string `json:"content"`
 	Done    bool   `json:"done"`
+}
+
+// HitL: 에이전트가 사용자 입력을 요청할 때 브로드캐스트
+type AgentNeedsInputEvent struct {
+	Type      string   `json:"type"`
+	AgentID   string   `json:"agentId"`
+	ToolUseID string   `json:"toolUseId"`
+	Prompt    string   `json:"prompt"`
+	Options   []string `json:"options"`
+}
+
+// 오케스트레이터 진행 상황 표시
+type AgentThinkingEvent struct {
+	Type    string `json:"type"`
+	AgentID string `json:"agentId"`
+	Step    string `json:"step"`
+}
+
+// 에이전트가 생성한 파일 다운로드 링크
+type AgentFileEvent struct {
+	Type     string `json:"type"`
+	AgentID  string `json:"agentId"`
+	Filename string `json:"filename"`
+	URL      string `json:"url"`
+	MimeType string `json:"mimeType"`
 }

@@ -220,11 +220,19 @@ RFC 7807 ProblemDetail 형식. 프론트엔드는 `title`(에러 코드)과 `det
 
 ## Infra
 
-### Docker Compose (1차)
+### Docker Compose
 - postgres:16-alpine / redis:7-alpine
-- Nginx: `/api/**` → 8080, `/ws/**` → 8081 (WebSocket upgrade), `/internal/**` deny
+- agolive-agent (Python/FastAPI, stateless — B/G 불필요)
+- Nginx: `/api/**` → 8080, `/ws/**` → 8081 (WebSocket upgrade), `/internal/**` deny, `/grafana/**` → Grafana
+- 내부 전용 포트 8090: Go → Spring 내부 호출 경유 (외부 미노출)
 
-### EKS (2차 전환 시 추가 예정)
+### Monitoring
+- Prometheus: api Blue/Green, realtime Blue/Green, node-exporter scrape (15s 간격)
+- Grafana: `https://{DOMAIN}/grafana` (서브패스)
+- node-exporter: EC2 시스템 메트릭
+- Go 커스텀 메트릭: `ws_active_connections_total` (Gauge, 활성 WS 연결 수)
+
+### EKS (추후 전환 시 추가 예정)
 
 ---
 
@@ -233,7 +241,7 @@ RFC 7807 ProblemDetail 형식. 프론트엔드는 `title`(에러 코드)과 `det
 | 결정 | 선택 | 이유 |
 |---|---|---|
 | 실시간 서버 | Go | goroutine 동시성, JVM 대비 메모리 효율 |
-| AI 에이전트 서버 | 2차에 별도 서비스로 추가 예정 | 에이전트 상태관리/오케스트레이션은 Spring/Go와 역할이 달라 분리 |
+| AI 에이전트 서버 | Python/FastAPI 별도 서비스 (agolive-agent) | 에이전트 상태관리/오케스트레이션은 Spring/Go와 역할이 달라 분리. 인메모리 세션, Claude Haiku SSE 스트리밍 |
 | WS 라이브러리 | coder/websocket | context 지원, 활발한 유지보수 |
 | 내부 통신 | REST → gRPC (2차) | 초기 개발 속도 우선 |
 | 메시지 브로커 | Redis Pub/Sub → Kafka (2차) | 1차 규모에 충분 |
@@ -250,19 +258,78 @@ agolive-agent (Python/FastAPI) — 구현 완료
 - 방 당 에이전트 1개 (role: helper | summarizer)
 - 에이전트 세션 in-memory 관리 (agentId → AgentSession)
 - 소환 시 최근 채팅 컨텍스트를 Spring에서 로드하여 system prompt에 반영
-- 사용자 메시지마다 Claude Haiku로 SSE 스트리밍 응답
-- 대화 히스토리 최대 40턴 유지
-- 마지막 클라이언트 퇴장 시 에이전트 자동 정리
+- 사용자 메시지마다 Claude Haiku (`claude-haiku-4-5-20251001`)로 SSE 스트리밍 응답
+- 대화 히스토리 최대 40턴 유지 (초과 시 오래된 것부터 제거, 짝수 쌍 유지)
+- 에이전트 고정 위치: x=900, y=200
+- 마지막 클라이언트 퇴장 시 고아 에이전트 자동 정리 (Hub.Leave → cleanupAgent)
+- Go에서 SSE 스트리밍 수신 시 별도 `agentC` (timeout 없음) 사용
 
 **에이전트 소환 플로우**
 ```
 client summon_agent → Go → POST /internal/agent/sessions
-  → agent_joined 브로드캐스트 (아바타 위치 포함)
+  → agent_joined 브로드캐스트 (agentId, role, nickname, x, y)
 user chat → Go → 메시지 저장/브로드캐스트 →
-  POST /internal/agent/sessions/{id}/message (SSE)
-  → agent_message 청크 브로드캐스트 (streaming: true → done: true)
+  POST /internal/agent/sessions/{id}/message (SSE, goroutine)
+  → agent_message 청크 브로드캐스트 (done: false → done: true)
 client dismiss_agent → Go → DELETE /internal/agent/sessions/{id}
   → agent_left 브로드캐스트
 ```
 
-**Phase 3 예정**: 멀티 에이전트, Human-in-the-loop, tool use, S3 파일 결과물
+---
+
+## Agent Architecture (Phase 3)
+
+agolive-agent (Python/FastAPI) — 구현 완료
+
+**멀티 에이전트**
+- 방 당 최대 4개 에이전트 동시 소환
+- 역할: helper | summarizer | researcher | critic | orchestrator
+- `@닉네임` 포함 시 해당 에이전트에게만 전달, 없으면 모든 에이전트
+- 신규 입장자에게 현재 에이전트 목록 즉시 전송 (agents_snapshot)
+- 에이전트별 개별 퇴장 (`dismiss_agent {agentId}`)
+
+**Tool Use 루프 (SSE 기반)**
+```
+Python: while True:
+  Claude API stream → text 청크 yield (content, done: false)
+  stop_reason == tool_use → {type:"tool_use", toolName, toolInput, toolUseId} yield
+  _tool_event.wait(timeout=60s, keepalive 5s) → Go가 /tool_result 주입 → 루프 재진행
+  stop_reason == end_turn → {done: true} yield
+```
+
+**Human-in-the-loop (request_human_input 툴)**
+```
+agent → tool_use: request_human_input
+  → Go: agent_needs_input 브로드캐스트 {agentId, toolUseId, prompt, options}
+  → Frontend: HumanInLoopDialog 표시
+  → user 선택/입력 → WS: agent_input {agentId, response}
+  → Go: AgentState.HumanInputCh ← response
+  → Go: POST /tool_result → Python 재개
+  timeout 120s: "(사용자 응답 없음)" 자동 주입
+```
+
+**Orchestrator (delegate_to_worker 툴)**
+```
+orchestrator → tool_use: delegate_to_worker {role, task}
+  → Go: agent_thinking 브로드캐스트
+  → Go: 워커 소환 → agent_joined 브로드캐스트
+  → Go: streamWorkerAndCollect (워커 SSE 브로드캐스트 + 텍스트 누적)
+  → Go: 워커 정리 → agent_left 브로드캐스트
+  → Go: POST /tool_result {workerResponse}
+  → orchestrator 최종 합성 응답
+```
+
+**S3 파일 결과물 (create_document 툴)**
+```
+agent → tool_use: create_document {filename, content, mime_type}
+  → Go: POST /internal/files → Python: aioboto3 S3 업로드 → presigned URL (7일)
+  → Go: agent_file 브로드캐스트
+  → Frontend: 파일 카드 (다운로드 링크)
+  → Go: POST /tool_result {url}
+```
+
+**agolive-agent 내부 API (Phase 3 추가)**
+```
+POST /internal/agent/sessions/{id}/tool_result  -- tool 결과 주입 (HitL 포함)
+POST /internal/files                            -- S3 업로드 (create_document 전용)
+```

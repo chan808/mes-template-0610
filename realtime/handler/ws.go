@@ -19,6 +19,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const maxAgentsPerRoom = 4
+
+// 에이전트 아바타 위치 (최대 4개, 겹침 방지)
+var agentPositions = [][2]float64{
+	{900, 200}, {700, 200}, {900, 500}, {700, 500},
+}
+
 type Handler struct {
 	hub    *hub.Hub
 	rdb    *redis.Client
@@ -165,6 +172,14 @@ func (h *Handler) enter(ctx context.Context, c *hub.Client) {
 	// 기존 접속자 위치를 신규 입장자에게 전송
 	h.sendExistingPresences(ctx, c)
 
+	// 현재 활성 에이전트 목록을 신규 입장자에게 전송
+	for _, a := range h.hub.GetAgents(c.RoomID) {
+		sendToClient(c, mustMarshal(model.AgentJoinedEvent{
+			Type: "agent_joined", AgentID: a.AgentID, Role: a.Role,
+			Nickname: a.Nickname, X: a.X, Y: a.Y,
+		}))
+	}
+
 	slog.Info("유저 입장", "userId", c.UserID, "roomId", c.RoomID)
 }
 
@@ -213,10 +228,11 @@ func (h *Handler) leave(c *hub.Client) {
 	msg := mustMarshal(model.LeaveEvent{Type: "leave", UserID: c.UserID})
 	h.hub.Publish(ctx, c.RoomID, msg)
 
-	// 마지막 클라이언트 퇴장으로 룸이 비면 고아 에이전트 정리
-	if orphaned := h.hub.Leave(c); orphaned != nil {
-		orphaned.CancelFn()
-		go h.cleanupAgent(orphaned.AgentID)
+	// 마지막 클라이언트 퇴장으로 룸이 비면 고아 에이전트 전부 정리
+	orphaned := h.hub.Leave(c)
+	for _, a := range orphaned {
+		a.CancelFn()
+		go h.cleanupAgentSession(a.AgentID)
 	}
 
 	h.rdb.SRem(ctx, "room:members:"+c.RoomID, c.UserID)
@@ -224,7 +240,7 @@ func (h *Handler) leave(c *hub.Client) {
 	slog.Info("유저 퇴장", "userId", c.UserID, "roomId", c.RoomID)
 }
 
-func (h *Handler) cleanupAgent(agentID string) {
+func (h *Handler) cleanupAgentSession(agentID string) {
 	req, err := http.NewRequest(http.MethodDelete,
 		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agentID, nil)
 	if err != nil {
@@ -255,7 +271,9 @@ func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte)
 	case "summon_agent":
 		h.handleSummonAgent(ctx, c, msg)
 	case "dismiss_agent":
-		h.handleDismissAgent(ctx, c)
+		h.handleDismissAgent(ctx, c, msg)
+	case "agent_input":
+		h.handleAgentInput(c, msg)
 	default:
 		sendError(c, "UNKNOWN_EVENT", "알 수 없는 이벤트입니다.")
 	}
@@ -299,15 +317,19 @@ func (h *Handler) handleChat(ctx context.Context, c *hub.Client, msg model.Clien
 	})
 	h.hub.Publish(ctx, c.RoomID, broadcast)
 
-	// 에이전트가 활성 상태이면 메시지를 전달하고 응답 스트리밍
-	if agent := h.hub.GetAgent(c.RoomID); agent != nil {
-		go h.streamAgentResponse(agent.AgentID, c.RoomID, c.UserID, c.Nickname, msg.Content)
+	// @mention이 있으면 언급된 에이전트에게만, 없으면 모든 에이전트에게 전달
+	agents := h.hub.GetAgents(c.RoomID)
+	hasMention := strings.Contains(msg.Content, "@")
+	for _, agent := range agents {
+		if !hasMention || strings.Contains(msg.Content, "@"+agent.Nickname) {
+			go h.streamAgentResponse(agent.AgentID, c.RoomID, c.UserID, c.Nickname, msg.Content)
+		}
 	}
 }
 
 func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
-	if h.hub.HasAgent(c.RoomID) {
-		sendError(c, "AGENT_ALREADY_EXISTS", "이미 에이전트가 소환되어 있습니다.")
+	if h.hub.AgentCount(c.RoomID) >= maxAgentsPerRoom {
+		sendError(c, "AGENT_LIMIT_EXCEEDED", fmt.Sprintf("에이전트는 최대 %d개까지 소환할 수 있습니다.", maxAgentsPerRoom))
 		return
 	}
 
@@ -316,7 +338,11 @@ func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg mode
 		role = "helper"
 	}
 
-	body, _ := json.Marshal(map[string]any{"roomId": c.RoomID, "role": role})
+	// 현재 에이전트 수 기준으로 위치 결정
+	idx := h.hub.AgentCount(c.RoomID) % len(agentPositions)
+	x, y := agentPositions[idx][0], agentPositions[idx][1]
+
+	body, _ := json.Marshal(map[string]any{"roomId": c.RoomID, "role": role, "x": x, "y": y})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		h.cfg.AgentAPIURL+"/internal/agent/sessions", bytes.NewReader(body))
 	if err != nil {
@@ -328,16 +354,21 @@ func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg mode
 
 	resp, err := h.hc.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		slog.Error("에이전트 소환 실패", "err", err, "roomId", c.RoomID)
-		sendError(c, "INTERNAL_ERROR", "에이전트 소환에 실패했습니다.")
+		if resp != nil && resp.StatusCode == http.StatusConflict {
+			sendError(c, "AGENT_LIMIT_EXCEEDED", "에이전트 최대 수에 도달했습니다.")
+		} else {
+			slog.Error("에이전트 소환 실패", "err", err, "roomId", c.RoomID)
+			sendError(c, "INTERNAL_ERROR", "에이전트 소환에 실패했습니다.")
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
 		return
 	}
 	defer resp.Body.Close()
 
 	var result struct {
 		AgentID  string  `json:"agentId"`
-		X        float64 `json:"x"`
-		Y        float64 `json:"y"`
 		Nickname string  `json:"nickname"`
 		Role     string  `json:"role"`
 	}
@@ -347,24 +378,34 @@ func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg mode
 	}
 
 	agentCtx, cancelFn := context.WithCancel(context.Background())
-	h.hub.SetAgent(c.RoomID, &hub.AgentState{AgentID: result.AgentID, CancelFn: cancelFn})
-	_ = agentCtx // 향후 스트리밍 중단에 사용
+	_ = agentCtx
+	state := &hub.AgentState{
+		AgentID:      result.AgentID,
+		Role:         result.Role,
+		Nickname:     result.Nickname,
+		X:            x,
+		Y:            y,
+		CancelFn:     cancelFn,
+		HumanInputCh: make(chan string, 1),
+	}
+	h.hub.AddAgent(c.RoomID, state)
 
 	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.AgentJoinedEvent{
-		Type:     "agent_joined",
-		AgentID:  result.AgentID,
-		Role:     result.Role,
-		Nickname: result.Nickname,
-		X:        result.X,
-		Y:        result.Y,
+		Type: "agent_joined", AgentID: result.AgentID, Role: result.Role,
+		Nickname: result.Nickname, X: x, Y: y,
 	}))
 	slog.Info("에이전트 소환", "agentId", result.AgentID, "roomId", c.RoomID, "role", result.Role)
 }
 
-func (h *Handler) handleDismissAgent(ctx context.Context, c *hub.Client) {
-	agent := h.hub.GetAgent(c.RoomID)
+func (h *Handler) handleDismissAgent(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
+	if msg.AgentID == "" {
+		sendError(c, "INVALID_PAYLOAD", "agentId가 필요합니다.")
+		return
+	}
+
+	agent := h.hub.RemoveAgent(c.RoomID, msg.AgentID)
 	if agent == nil {
-		sendError(c, "NO_AGENT", "소환된 에이전트가 없습니다.")
+		sendError(c, "NO_AGENT", "해당 에이전트가 없습니다.")
 		return
 	}
 
@@ -380,12 +421,46 @@ func (h *Handler) handleDismissAgent(ctx context.Context, c *hub.Client) {
 		}
 	}
 
-	h.hub.ClearAgent(c.RoomID)
 	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.AgentLeftEvent{
-		Type:    "agent_left",
-		AgentID: agent.AgentID,
+		Type: "agent_left", AgentID: agent.AgentID,
 	}))
 	slog.Info("에이전트 퇴장", "agentId", agent.AgentID, "roomId", c.RoomID)
+}
+
+// handleAgentInput은 HitL 응답을 대기 중인 streamAgentResponse 고루틴에 전달한다
+func (h *Handler) handleAgentInput(c *hub.Client, msg model.ClientMessage) {
+	if msg.AgentID == "" || msg.Response == "" {
+		sendError(c, "INVALID_PAYLOAD", "agentId와 response가 필요합니다.")
+		return
+	}
+
+	agent := h.hub.GetAgent(c.RoomID, msg.AgentID)
+	if agent == nil {
+		sendError(c, "NO_AGENT", "해당 에이전트가 없습니다.")
+		return
+	}
+
+	// 비블로킹: 이미 응답이 있거나 대기 중이 아니면 무시
+	select {
+	case agent.HumanInputCh <- msg.Response:
+	default:
+	}
+}
+
+// sseEvent는 agolive-agent SSE 이벤트의 공통 구조다
+type sseEvent struct {
+	Type      string          `json:"type"`       // "", "text", "tool_use", "file"
+	Content   string          `json:"content"`
+	Done      bool            `json:"done"`
+	Error     string          `json:"error"`
+	ToolName  string          `json:"toolName"`
+	ToolInput json.RawMessage `json:"toolInput"`
+	ToolUseID string          `json:"toolUseId"`
+	Prompt    string          `json:"prompt"`
+	Options   []string        `json:"options"`
+	Filename  string          `json:"filename"`
+	URL       string          `json:"url"`
+	MimeType  string          `json:"mimeType"`
 }
 
 func (h *Handler) streamAgentResponse(agentID, roomID string, userID int64, nickname, content string) {
@@ -410,9 +485,15 @@ func (h *Handler) streamAgentResponse(agentID, roomID string, userID int64, nick
 	}
 	defer resp.Body.Close()
 
+	h.consumeAgentSSE(resp, agentID, roomID)
+}
+
+// consumeAgentSSE는 에이전트 SSE 스트림을 소비하며 이벤트를 처리한다.
+// tool_use 이벤트를 만나면 도구를 실행하고 tool_result를 주입한 뒤 스트림을 계속 읽는다.
+func (h *Handler) consumeAgentSSE(resp *http.Response, agentID, roomID string) {
+	ctx := context.Background()
 	buf := make([]byte, 4096)
 	leftover := ""
-	ctx := context.Background()
 
 	for {
 		n, err := resp.Body.Read(buf)
@@ -430,22 +511,28 @@ func (h *Handler) streamAgentResponse(agentID, roomID string, userID int64, nick
 					continue
 				}
 				payload := line[6:]
-				var event struct {
-					Content string `json:"content"`
-					Done    bool   `json:"done"`
-					Error   string `json:"error"`
-				}
+				var event sseEvent
 				if json.Unmarshal([]byte(payload), &event) != nil {
 					continue
 				}
-				h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
-					Type:    "agent_message",
-					AgentID: agentID,
-					Content: event.Content,
-					Done:    event.Done,
-				}))
-				if event.Done {
-					return
+
+				switch event.Type {
+				case "tool_use":
+					h.handleToolUse(ctx, agentID, roomID, event)
+				case "file":
+					h.hub.Publish(ctx, roomID, mustMarshal(model.AgentFileEvent{
+						Type: "agent_file", AgentID: agentID,
+						Filename: event.Filename, URL: event.URL, MimeType: event.MimeType,
+					}))
+				default:
+					// type이 "" 또는 "text"인 경우 모두 텍스트로 처리
+					h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
+						Type: "agent_message", AgentID: agentID,
+						Content: event.Content, Done: event.Done,
+					}))
+					if event.Done {
+						return
+					}
 				}
 			}
 		}
@@ -455,10 +542,259 @@ func (h *Handler) streamAgentResponse(agentID, roomID string, userID int64, nick
 	}
 }
 
+// handleToolUse는 tool_use 이벤트를 처리한다.
+func (h *Handler) handleToolUse(ctx context.Context, agentID, roomID string, event sseEvent) {
+	agent := h.hub.GetAgent(roomID, agentID)
+	if agent == nil {
+		return
+	}
+
+	switch event.ToolName {
+	case "request_human_input":
+		var input struct {
+			Prompt  string   `json:"prompt"`
+			Options []string `json:"options"`
+		}
+		json.Unmarshal(event.ToolInput, &input)
+
+		h.hub.Publish(ctx, roomID, mustMarshal(model.AgentNeedsInputEvent{
+			Type: "agent_needs_input", AgentID: agentID,
+			ToolUseID: event.ToolUseID,
+			Prompt:    input.Prompt, Options: input.Options,
+		}))
+
+		// 사용자 응답 대기 (최대 120초)
+		var userResponse string
+		select {
+		case userResponse = <-agent.HumanInputCh:
+		case <-time.After(120 * time.Second):
+			userResponse = "(사용자 응답 없음)"
+		}
+		h.sendToolResult(ctx, agentID, event.ToolUseID, userResponse)
+
+	case "delegate_to_worker":
+		result := h.executeDelegateToWorker(ctx, roomID, agentID, event)
+		h.sendToolResult(ctx, agentID, event.ToolUseID, result)
+
+	case "create_document":
+		url := h.executeCreateDocument(ctx, agentID, roomID, event)
+		h.sendToolResult(ctx, agentID, event.ToolUseID, url)
+
+	default:
+		slog.Warn("미지원 tool_use", "toolName", event.ToolName, "agentId", agentID)
+		h.sendToolResult(ctx, agentID, event.ToolUseID, "지원하지 않는 도구입니다.")
+	}
+}
+
+// executeDelegateToWorker는 워커 에이전트를 소환하고 태스크를 실행한 뒤 결과를 반환한다.
+func (h *Handler) executeDelegateToWorker(ctx context.Context, roomID, orchestratorID string, event sseEvent) string {
+	var input struct {
+		Role string `json:"role"`
+		Task string `json:"task"`
+	}
+	if err := json.Unmarshal(event.ToolInput, &input); err != nil || input.Role == "" {
+		return "워커 입력 파싱 실패"
+	}
+
+	// 진행 상황 브로드캐스트
+	orchestrator := h.hub.GetAgent(roomID, orchestratorID)
+	if orchestrator != nil {
+		h.hub.Publish(ctx, roomID, mustMarshal(model.AgentThinkingEvent{
+			Type:    "agent_thinking",
+			AgentID: orchestratorID,
+			Step:    input.Role + "에게 작업 위임 중...",
+		}))
+	}
+
+	// 워커 소환 위치 계산
+	count := h.hub.AgentCount(roomID)
+	idx := count % len(agentPositions)
+	x, y := agentPositions[idx][0], agentPositions[idx][1]
+
+	body, _ := json.Marshal(map[string]any{"roomId": roomID, "role": input.Role, "x": x, "y": y})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions", bytes.NewReader(body))
+	if err != nil {
+		return "워커 소환 실패"
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+
+	resp, err := h.hc.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return "워커 소환 실패"
+	}
+	defer resp.Body.Close()
+
+	var workerInfo struct {
+		AgentID  string `json:"agentId"`
+		Nickname string `json:"nickname"`
+		Role     string `json:"role"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&workerInfo); err != nil {
+		return "워커 응답 파싱 실패"
+	}
+
+	// Hub에 워커 등록 + 입장 브로드캐스트
+	_, cancelFn := context.WithCancel(context.Background())
+	workerState := &hub.AgentState{
+		AgentID: workerInfo.AgentID, Role: workerInfo.Role,
+		Nickname: workerInfo.Nickname, X: x, Y: y,
+		CancelFn:     cancelFn,
+		HumanInputCh: make(chan string, 1),
+	}
+	h.hub.AddAgent(roomID, workerState)
+	h.hub.Publish(ctx, roomID, mustMarshal(model.AgentJoinedEvent{
+		Type: "agent_joined", AgentID: workerInfo.AgentID,
+		Role: workerInfo.Role, Nickname: workerInfo.Nickname, X: x, Y: y,
+	}))
+
+	// 태스크 실행 + 응답 수집
+	workerResponse := h.streamWorkerAndCollect(workerInfo.AgentID, roomID, input.Task)
+
+	// 워커 정리
+	cancelFn()
+	go h.cleanupAgentSession(workerInfo.AgentID)
+	h.hub.RemoveAgent(roomID, workerInfo.AgentID)
+	h.hub.Publish(ctx, roomID, mustMarshal(model.AgentLeftEvent{
+		Type: "agent_left", AgentID: workerInfo.AgentID,
+	}))
+
+	return workerResponse
+}
+
+// streamWorkerAndCollect는 워커에게 태스크를 전달하고 응답을 브로드캐스트하면서 전문 텍스트를 반환한다.
+func (h *Handler) streamWorkerAndCollect(agentID, roomID, task string) string {
+	body, _ := json.Marshal(map[string]any{
+		"userId": 0, "nickname": "Orchestrator", "content": task,
+	})
+	req, err := http.NewRequest(http.MethodPost,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agentID+"/message",
+		bytes.NewReader(body))
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+
+	resp, err := h.agentC.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	ctx := context.Background()
+	var fullText strings.Builder
+	buf := make([]byte, 4096)
+	leftover := ""
+
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			chunk := leftover + string(buf[:n])
+			leftover = ""
+			lines := strings.Split(chunk, "\n")
+			for i, line := range lines {
+				if i == len(lines)-1 {
+					leftover = line
+					continue
+				}
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+				var ev sseEvent
+				if json.Unmarshal([]byte(line[6:]), &ev) != nil {
+					continue
+				}
+				switch ev.Type {
+				case "tool_use":
+					// 워커의 tool_use는 미지원 응답으로 처리 (중첩 방지)
+					h.sendToolResult(ctx, agentID, ev.ToolUseID, "(도구 중첩 미지원)")
+				case "file":
+					h.hub.Publish(ctx, roomID, mustMarshal(model.AgentFileEvent{
+						Type: "agent_file", AgentID: agentID,
+						Filename: ev.Filename, URL: ev.URL, MimeType: ev.MimeType,
+					}))
+				default:
+					fullText.WriteString(ev.Content)
+					h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
+						Type: "agent_message", AgentID: agentID,
+						Content: ev.Content, Done: ev.Done,
+					}))
+					if ev.Done {
+						return fullText.String()
+					}
+				}
+			}
+		}
+		if err != nil {
+			return fullText.String()
+		}
+	}
+}
+
+// executeCreateDocument는 Python /internal/files 엔드포인트를 통해 파일을 S3에 업로드하고 URL을 반환한다.
+func (h *Handler) executeCreateDocument(ctx context.Context, agentID, roomID string, event sseEvent) string {
+	resp, err := h.hc.Post(
+		h.cfg.AgentAPIURL+"/internal/files",
+		"application/json",
+		bytes.NewReader(event.ToolInput),
+	)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		slog.Error("파일 생성 실패", "agentId", agentID, "err", err)
+		return "파일 생성에 실패했습니다."
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		URL      string `json:"url"`
+		Filename string `json:"filename"`
+		MimeType string `json:"mimeType"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "파일 응답 파싱 실패"
+	}
+
+	// 파일 이벤트 브로드캐스트 (chatStore에서 파일 카드로 렌더링)
+	h.hub.Publish(ctx, roomID, mustMarshal(model.AgentFileEvent{
+		Type: "agent_file", AgentID: agentID,
+		Filename: result.Filename, URL: result.URL, MimeType: result.MimeType,
+	}))
+
+	return fmt.Sprintf("파일이 생성되었습니다: %s (%s)", result.Filename, result.URL)
+}
+
+// sendToolResult는 /internal/agent/sessions/{id}/tool_result로 결과를 주입한다
+func (h *Handler) sendToolResult(ctx context.Context, agentID, toolUseID, result string) {
+	body, _ := json.Marshal(map[string]any{
+		"results": []map[string]any{
+			{"type": "tool_result", "tool_use_id": toolUseID, "content": result},
+		},
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		h.cfg.AgentAPIURL+"/internal/agent/sessions/"+agentID+"/tool_result",
+		bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret)
+	resp, _ := h.hc.Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
+
 func (h *Handler) handlePing(ctx context.Context, c *hub.Client) {
 	// presence TTL 갱신
 	h.rdb.Expire(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), 30*time.Second)
-
 	sendToClient(c, mustMarshal(model.PongEvent{Type: "pong"}))
 }
 

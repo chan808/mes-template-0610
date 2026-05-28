@@ -19,7 +19,7 @@ export function useWebSocket(roomId: number) {
   const retryCountRef = useRef(0);
   const unmountedRef = useRef(false);
 
-  const { setStatus, setWs, reset } = useWsStore();
+  const { setStatus, setWs, setHumanInputRequest, reset } = useWsStore();
   const { upsertPresence, removePresence, cacheNickname, getNickname, upsertAgent, removeAgent, clear: clearPresence } = usePresenceStore();
   const { appendMessage, appendAgentChunk, clear: clearChat } = useChatStore();
 
@@ -56,7 +56,6 @@ export function useWebSocket(roomId: number) {
           break;
 
         case "join":
-          // 입장 시 닉네임 캐시에 저장
           cacheNickname(msg.userId, msg.nickname);
           appendMessage({
             id: `join-${msg.userId}-${Date.now()}`,
@@ -81,7 +80,7 @@ export function useWebSocket(roomId: number) {
         case "agent_joined":
           upsertAgent({ agentId: msg.agentId, role: msg.role, nickname: msg.nickname, x: msg.x, y: msg.y });
           appendMessage({
-            id: `agent-join-${msg.agentId}`,
+            id: `agent-join-${msg.agentId}-${Date.now()}`,
             type: "system",
             content: `${msg.nickname}이(가) 소환되었습니다.`,
             createdAt: new Date().toISOString(),
@@ -92,6 +91,11 @@ export function useWebSocket(roomId: number) {
           const agent = usePresenceStore.getState().agents.get(msg.agentId);
           const agentName = agent?.nickname ?? "AI 에이전트";
           removeAgent(msg.agentId);
+          // HitL 다이얼로그가 열려있던 에이전트가 퇴장하면 닫기
+          const current = useWsStore.getState().humanInputRequest;
+          if (current?.agentId === msg.agentId) {
+            setHumanInputRequest(null);
+          }
           appendMessage({
             id: `agent-leave-${msg.agentId}-${Date.now()}`,
             type: "system",
@@ -107,12 +111,50 @@ export function useWebSocket(roomId: number) {
           break;
         }
 
+        case "agent_needs_input": {
+          const agent = usePresenceStore.getState().agents.get(msg.agentId);
+          setHumanInputRequest({
+            agentId: msg.agentId,
+            toolUseId: msg.toolUseId,
+            agentNickname: agent?.nickname ?? "AI 에이전트",
+            prompt: msg.prompt,
+            options: msg.options ?? [],
+          });
+          break;
+        }
+
+        case "agent_thinking": {
+          const agent = usePresenceStore.getState().agents.get(msg.agentId);
+          appendMessage({
+            id: `agent-thinking-${msg.agentId}-${Date.now()}`,
+            type: "system",
+            content: `${agent?.nickname ?? "AI"}: ${msg.step}`,
+            createdAt: new Date().toISOString(),
+          });
+          break;
+        }
+
+        case "agent_file": {
+          const agent = usePresenceStore.getState().agents.get(msg.agentId);
+          appendMessage({
+            id: `agent-file-${msg.agentId}-${Date.now()}`,
+            type: "file",
+            agentId: msg.agentId,
+            nickname: agent?.nickname ?? "AI",
+            filename: msg.filename,
+            url: msg.url,
+            mimeType: msg.mimeType,
+            createdAt: new Date().toISOString(),
+          });
+          break;
+        }
+
         case "error":
           toast.error(`서버 오류: ${msg.message}`);
           break;
       }
     },
-    [upsertPresence, removePresence, cacheNickname, getNickname, appendMessage, appendAgentChunk, upsertAgent, removeAgent],
+    [upsertPresence, removePresence, cacheNickname, getNickname, appendMessage, appendAgentChunk, upsertAgent, removeAgent, setHumanInputRequest],
   );
 
   const startPing = useCallback((ws: WebSocket) => {

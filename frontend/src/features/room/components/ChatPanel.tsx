@@ -101,6 +101,24 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
             );
           }
 
+          if (msg.type === "file") {
+            return (
+              <div key={msg.id} className="flex flex-col gap-0.5 items-start">
+                <span className="px-1 text-xs font-medium text-violet-400">{msg.nickname}</span>
+                <a
+                  href={msg.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-xl border border-violet-700 bg-violet-950 px-3 py-2 text-sm text-violet-100 hover:bg-violet-900 transition-colors"
+                >
+                  <span className="text-base">📄</span>
+                  <span className="truncate max-w-[150px]">{msg.filename}</span>
+                  <span className="shrink-0 text-xs text-violet-400">↓</span>
+                </a>
+              </div>
+            );
+          }
+
           const isMe = msg.userId === myUserId;
 
           return (

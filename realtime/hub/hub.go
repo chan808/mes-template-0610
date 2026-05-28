@@ -46,14 +46,19 @@ func (c *Client) SignalDone() {
 }
 
 type AgentState struct {
-	AgentID  string
-	CancelFn context.CancelFunc
+	AgentID      string
+	Role         string
+	Nickname     string
+	X            float64
+	Y            float64
+	CancelFn     context.CancelFunc
+	HumanInputCh chan string // HitL: handleAgentInput → streamAgentResponse 응답 전달
 }
 
 type roomState struct {
 	clients map[*Client]bool
 	ps      *redis.PubSub
-	agent   *AgentState
+	agents  map[string]*AgentState
 }
 
 type Hub struct {
@@ -76,7 +81,10 @@ func (h *Hub) Join(c *Client) {
 
 	r, ok := h.rooms[c.RoomID]
 	if !ok {
-		r = &roomState{clients: make(map[*Client]bool)}
+		r = &roomState{
+			clients: make(map[*Client]bool),
+			agents:  make(map[string]*AgentState),
+		}
 		h.rooms[c.RoomID] = r
 		h.startSubscriber(c.RoomID, r)
 	}
@@ -85,8 +93,8 @@ func (h *Hub) Join(c *Client) {
 }
 
 // Leave는 클라이언트를 룸에서 제거한다.
-// 마지막 클라이언트 퇴장으로 룸이 비워지면서 에이전트가 있었다면 해당 AgentState를 반환한다.
-func (h *Hub) Leave(c *Client) *AgentState {
+// 마지막 클라이언트 퇴장으로 룸이 비면 고아 에이전트 목록을 반환한다.
+func (h *Hub) Leave(c *Client) []*AgentState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -97,8 +105,12 @@ func (h *Hub) Leave(c *Client) *AgentState {
 	delete(r.clients, c)
 	c.SignalDone()
 	wsActiveConnections.Dec()
+
 	if len(r.clients) == 0 {
-		orphaned := r.agent
+		orphaned := make([]*AgentState, 0, len(r.agents))
+		for _, a := range r.agents {
+			orphaned = append(orphaned, a)
+		}
 		r.ps.Close()
 		delete(h.rooms, c.RoomID)
 		return orphaned
@@ -111,43 +123,59 @@ func (h *Hub) Publish(ctx context.Context, roomID string, data []byte) {
 	h.rdb.Publish(ctx, "room:"+roomID, string(data))
 }
 
-// SetAgent는 룸에 에이전트 세션을 등록한다
-func (h *Hub) SetAgent(roomID string, state *AgentState) {
+// AddAgent는 룸에 에이전트를 등록한다
+func (h *Hub) AddAgent(roomID string, state *AgentState) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	r, ok := h.rooms[roomID]
-	if ok {
-		r.agent = state
+	if r, ok := h.rooms[roomID]; ok {
+		r.agents[state.AgentID] = state
 	}
 }
 
-// GetAgent는 룸의 에이전트 세션을 반환한다
-func (h *Hub) GetAgent(roomID string) *AgentState {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+// RemoveAgent는 룸에서 특정 에이전트를 제거하고 반환한다
+func (h *Hub) RemoveAgent(roomID, agentID string) *AgentState {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if r, ok := h.rooms[roomID]; ok {
-		return r.agent
+		a := r.agents[agentID]
+		delete(r.agents, agentID)
+		return a
 	}
 	return nil
 }
 
-// ClearAgent는 룸의 에이전트 세션을 제거한다
-func (h *Hub) ClearAgent(roomID string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if r, ok := h.rooms[roomID]; ok {
-		r.agent = nil
-	}
-}
-
-// HasAgent는 룸에 에이전트가 있는지 확인한다
-func (h *Hub) HasAgent(roomID string) bool {
+// GetAgents는 룸의 모든 에이전트 목록을 반환한다
+func (h *Hub) GetAgents(roomID string) []*AgentState {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if r, ok := h.rooms[roomID]; ok {
-		return r.agent != nil
+		agents := make([]*AgentState, 0, len(r.agents))
+		for _, a := range r.agents {
+			agents = append(agents, a)
+		}
+		return agents
 	}
-	return false
+	return nil
+}
+
+// GetAgent는 룸의 특정 에이전트를 반환한다
+func (h *Hub) GetAgent(roomID, agentID string) *AgentState {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if r, ok := h.rooms[roomID]; ok {
+		return r.agents[agentID]
+	}
+	return nil
+}
+
+// AgentCount는 룸의 현재 에이전트 수를 반환한다
+func (h *Hub) AgentCount(roomID string) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if r, ok := h.rooms[roomID]; ok {
+		return len(r.agents)
+	}
+	return 0
 }
 
 func (h *Hub) startSubscriber(roomID string, r *roomState) {
