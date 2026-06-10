@@ -279,18 +279,20 @@ func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte)
 }
 
 func (h *Handler) handleMove(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
+	// move는 사용자가 대응할 수 없는 실패라 error 대신 서버 권위 위치를 회신해 보정시킨다
+	// (구버전 클라이언트의 픽셀 좌표 전송 등에도 에러 토스트 없이 동작)
 	if msg.X == nil || msg.Y == nil {
-		sendError(c, "INVALID_PAYLOAD", "잘못된 move 페이로드입니다.")
+		sendToClient(c, presenceEventOf(c))
 		return
 	}
 	toX, okX := game.ParseTileCoord(*msg.X)
 	toY, okY := game.ParseTileCoord(*msg.Y)
 	if !okX || !okY || !game.IsValidDir(msg.Dir) {
-		sendError(c, "INVALID_PAYLOAD", "잘못된 move 페이로드입니다.")
+		sendToClient(c, presenceEventOf(c))
 		return
 	}
 
-	// 인접성·범위·속도 검증 실패 시 서버 권위 위치를 회신해 클라이언트가 스스로 보정하게 한다
+	// 인접성·범위·속도 검증
 	if !game.CanMove(c.TileX, c.TileY, toX, toY) || !c.MoveLimiter.Allow(time.Now()) {
 		sendToClient(c, presenceEventOf(c))
 		return

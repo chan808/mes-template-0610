@@ -198,6 +198,9 @@ export function useWebSocket(roomId: number, myUserId: number) {
         return;
       }
       retryCountRef.current = 0;
+      // 재연결 시 이전 연결의 잔여 presence/에이전트 제거 (유령 아바타 방지)
+      // — 서버가 입장 직후 현재 상태(내 스폰 위치 포함)를 다시 보내준다
+      clearPresence();
       setStatus("connected");
       startPing(ws);
     };
@@ -224,7 +227,7 @@ export function useWebSocket(roomId: number, myUserId: number) {
       }
       reconnectTimerRef.current = setTimeout(connect, delay);
     };
-  }, [roomId, handleMessage, startPing, stopPing, setStatus, setWs]);
+  }, [roomId, handleMessage, startPing, stopPing, setStatus, setWs, clearPresence]);
 
   const disconnect = useCallback(() => {
     unmountedRef.current = true;

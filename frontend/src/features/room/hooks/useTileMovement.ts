@@ -6,16 +6,17 @@ import { DEFAULT_MAP } from "../lib/maps";
 import { DIR_DELTA, Direction, MOVE_MS, isWalkable } from "../lib/tile";
 import { ClientMessage } from "../types/ws";
 
-// 물리 키 → 방향 매핑 (WASD + 방향키)
-const KEY_TO_DIR: Record<string, Direction> = {
-  arrowup: "up",
-  arrowdown: "down",
-  arrowleft: "left",
-  arrowright: "right",
-  w: "up",
-  s: "down",
-  a: "left",
-  d: "right",
+// 물리 키 코드 → 방향 매핑 (WASD + 방향키)
+// e.key 대신 e.code 사용 — 한글 IME 상태에서도 WASD가 동작해야 한다 ("w" → "ㅈ" 문제)
+const CODE_TO_DIR: Record<string, Direction> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  KeyW: "up",
+  KeyS: "down",
+  KeyA: "left",
+  KeyD: "right",
 };
 
 // 칸 단위 이동: 이동 중에는 입력을 받지 않고, 한 칸 이동이 끝나면
@@ -45,14 +46,12 @@ export function useTileMovement(send: (msg: ClientMessage) => void) {
 
     const loop = (now: number) => {
       if (now >= movingUntilRef.current) {
-        const keys = pressedRef.current;
-        const lastKey = keys[keys.length - 1];
-        if (lastKey) step(KEY_TO_DIR[lastKey], now);
+        const codes = pressedRef.current;
+        const lastCode = codes[codes.length - 1];
+        if (lastCode) step(CODE_TO_DIR[lastCode], now);
       }
       rafRef.current = requestAnimationFrame(loop);
     };
-
-    const normalizeKey = (e: KeyboardEvent) => e.key.toLowerCase();
 
     // 채팅 입력 등 폼 요소에 포커스가 있으면 이동 키를 가로채지 않는다
     const isTypingTarget = (e: KeyboardEvent) => {
@@ -62,17 +61,15 @@ export function useTileMovement(send: (msg: ClientMessage) => void) {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
-      const key = normalizeKey(e);
-      if (!(key in KEY_TO_DIR)) return;
+      if (!(e.code in CODE_TO_DIR)) return;
       e.preventDefault();
-      if (!pressedRef.current.includes(key)) {
-        pressedRef.current.push(key);
+      if (!pressedRef.current.includes(e.code)) {
+        pressedRef.current.push(e.code);
       }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      const key = normalizeKey(e);
-      pressedRef.current = pressedRef.current.filter((k) => k !== key);
+      pressedRef.current = pressedRef.current.filter((k) => k !== e.code);
     };
 
     // 탭 전환 등으로 keyup을 놓치면 키가 눌린 상태로 남으므로 초기화
