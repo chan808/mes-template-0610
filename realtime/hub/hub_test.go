@@ -126,6 +126,17 @@ func Test_동시예약_정원초과없음(t *testing.T) {
 	}
 }
 
+func Test_방정리후_커밋_실패반환(t *testing.T) {
+	h := newTestHub("1")
+	slot, _ := h.TryReserveAgentSlot("1", testMaxAgents)
+	// 소환 도중 전원 퇴장으로 방이 정리된 상황
+	delete(h.rooms, "1")
+
+	ok := h.CommitAgent("1", newTestAgent("a", slot))
+
+	assert.False(t, ok)
+}
+
 func Test_커밋된에이전트_조회_성공(t *testing.T) {
 	h := newTestHub("1")
 	slot, _ := h.TryReserveAgentSlot("1", testMaxAgents)

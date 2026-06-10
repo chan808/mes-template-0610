@@ -137,6 +137,29 @@ class TestSummonAgent:
         assert first["nickname"] != second["nickname"]
         assert second["nickname"].endswith("2")
 
+    def test_퇴장후_재소환시_닉네임_중복없음(self):
+        client = TestClient(app)
+        first = client.post(
+            "/internal/agent/sessions",
+            json={"roomId": "1", "role": "helper"},
+            headers=self.HEADERS,
+        ).json()
+        second = client.post(
+            "/internal/agent/sessions",
+            json={"roomId": "1", "role": "helper"},
+            headers=self.HEADERS,
+        ).json()
+
+        # 1번("AI 도우미") 퇴장 후 재소환 → 기존 "AI 도우미 2"와 중복되면 안 된다
+        client.delete(f"/internal/agent/sessions/{first['agentId']}", headers=self.HEADERS)
+        third = client.post(
+            "/internal/agent/sessions",
+            json={"roomId": "1", "role": "helper"},
+            headers=self.HEADERS,
+        ).json()
+
+        assert third["nickname"] != second["nickname"]
+
     def test_다른방은_정원에영향없음(self):
         client = TestClient(app)
         for _ in range(4):

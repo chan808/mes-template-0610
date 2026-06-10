@@ -177,8 +177,9 @@ def truncate_history(history: list[dict], max_len: int = MAX_HISTORY) -> list[di
 async def summon_agent(body: dict, _=Depends(verify_internal)):
     room_id = str(body["roomId"])
     role = body.get("role", "helper")
-    x = float(body.get("x", 900.0))
-    y = float(body.get("y", 200.0))
+    # 타일 좌표 (realtime이 항상 전달 — 미전달 시 기본 슬롯 0 위치)
+    x = float(body.get("x", 22.0))
+    y = float(body.get("y", 5.0))
 
     config = ROLE_CONFIGS.get(role, ROLE_CONFIGS["helper"])
     agent_id = str(uuid.uuid4())
@@ -211,10 +212,13 @@ async def summon_agent(body: dict, _=Depends(verify_internal)):
         room_sessions = [s for s in _sessions.values() if s.room_id == room_id]
         if len(room_sessions) >= MAX_AGENTS_PER_ROOM:
             raise HTTPException(status_code=409, detail="AGENT_LIMIT_EXCEEDED")
-        # 동일 역할 중복 소환 시 닉네임에 번호를 붙여 구분 (@멘션 라우팅 충돌 방지)
-        same_role_count = sum(1 for s in room_sessions if s.role == role)
-        if same_role_count:
-            session.nickname = f"{config['nickname']} {same_role_count + 1}"
+        # 동일 역할 중복 소환 시 사용 중이지 않은 가장 작은 번호 부여 (퇴장 후 재소환 시 중복 방지)
+        used_nicknames = {s.nickname for s in room_sessions if s.role == role}
+        if config["nickname"] in used_nicknames:
+            n = 2
+            while f"{config['nickname']} {n}" in used_nicknames:
+                n += 1
+            session.nickname = f"{config['nickname']} {n}"
         _sessions[agent_id] = session
 
     return {

@@ -1,19 +1,18 @@
 import { create } from "zustand";
 import { AgentEntry, PresenceEntry } from "../types/ws";
-
-const CANVAS_WIDTH = 1200;
-const CANVAS_HEIGHT = 800;
-const AVATAR_SIZE = 40;
+import { Direction, SPAWN_TILE, TilePos } from "../lib/tile";
 
 interface PresenceState {
   presences: Map<number, PresenceEntry>;
   agents: Map<string, AgentEntry>;
   // presence/join 이벤트로 수집한 닉네임 캐시 — removePresence 후에도 유지
   nicknameCache: Map<number, string>;
-  myPosition: { x: number; y: number };
+  myTile: TilePos;
+  myDir: Direction;
   upsertPresence: (entry: PresenceEntry) => void;
   removePresence: (userId: number) => void;
-  setMyPosition: (x: number, y: number) => void;
+  setMyTile: (x: number, y: number, dir: Direction) => void;
+  adoptServerPosition: (x: number, y: number, dir: Direction) => void;
   cacheNickname: (userId: number, nickname: string) => void;
   getNickname: (userId: number) => string;
   upsertAgent: (entry: AgentEntry) => void;
@@ -25,7 +24,8 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   presences: new Map(),
   agents: new Map(),
   nicknameCache: new Map(),
-  myPosition: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+  myTile: { ...SPAWN_TILE },
+  myDir: "down",
 
   upsertPresence: (entry) =>
     set((state) => {
@@ -44,12 +44,16 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       // nicknameCache는 유지 — 이후 채팅 메시지에서 닉네임 조회 가능
     }),
 
-  setMyPosition: (x, y) =>
-    set({
-      myPosition: {
-        x: Math.max(AVATAR_SIZE / 2, Math.min(CANVAS_WIDTH - AVATAR_SIZE / 2, x)),
-        y: Math.max(AVATAR_SIZE / 2, Math.min(CANVAS_HEIGHT - AVATAR_SIZE / 2, y)),
-      },
+  setMyTile: (x, y, dir) => set({ myTile: { x, y }, myDir: dir }),
+
+  // 내 presence 에코/보정 처리: 한 칸 차이는 전송 지연 중인 에코로 보고 무시,
+  // 두 칸 이상 어긋나면 서버 권위 위치로 스냅 (이동 거부·재접속 후 동기화)
+  adoptServerPosition: (x, y, dir) =>
+    set((state) => {
+      const dx = Math.abs(state.myTile.x - x);
+      const dy = Math.abs(state.myTile.y - y);
+      if (dx <= 1 && dy <= 1) return {};
+      return { myTile: { x, y }, myDir: dir };
     }),
 
   cacheNickname: (userId, nickname) =>
@@ -81,8 +85,7 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       presences: new Map(),
       agents: new Map(),
       nicknameCache: new Map(),
-      myPosition: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+      myTile: { ...SPAWN_TILE },
+      myDir: "down",
     }),
 }));
-
-export { CANVAS_WIDTH, CANVAS_HEIGHT, AVATAR_SIZE };

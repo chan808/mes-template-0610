@@ -41,6 +41,8 @@ export const useChatStore = create<ChatState>((set) => ({
       const finalId = `agent-${agentId}-${Date.now()}`;
 
       if (!existing) {
+        // 내용 없이 완료만 알리는 이벤트는 무시 (빈 말풍선 방지)
+        if (done && !content) return state;
         // 첫 청크: 스트리밍 메시지 생성
         const newMsg: DisplayMessage = {
           id: done ? finalId : streamId,

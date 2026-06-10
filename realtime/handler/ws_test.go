@@ -56,3 +56,22 @@ func Test_에이전트없음_빈목록반환(t *testing.T) {
 
 	assert.Empty(t, targets)
 }
+
+func Test_번호닉네임멘션_긴닉네임만매칭(t *testing.T) {
+	// "@AI 도우미 2" 멘션이 prefix가 같은 "AI 도우미"에 중복 매칭되면 안 된다
+	agents := makeAgents("AI 도우미", "AI 도우미 2")
+
+	targets := selectAgentTargets("@AI 도우미 2 이것 좀 봐줘", agents)
+
+	assert.Len(t, targets, 1)
+	assert.Equal(t, "AI 도우미 2", targets[0].Nickname)
+}
+
+func Test_짧은닉네임멘션_번호닉네임_미매칭(t *testing.T) {
+	agents := makeAgents("AI 도우미", "AI 도우미 2")
+
+	targets := selectAgentTargets("@AI 도우미 안녕", agents)
+
+	assert.Len(t, targets, 1)
+	assert.Equal(t, "AI 도우미", targets[0].Nickname)
+}

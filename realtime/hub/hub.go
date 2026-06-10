@@ -3,7 +3,9 @@ package hub
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/chan808/agolive-realtime/game"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redis/go-redis/v9"
@@ -19,19 +21,28 @@ type Client struct {
 	Nickname string
 	AvatarID *int64
 	RoomID   string
-	Send     chan []byte
-	done     chan struct{}
-	doneOnce sync.Once
+	// 서버 권위 타일 위치 — 게임 모드 판정의 기준값 (읽기 루프 단일 고루틴에서만 갱신)
+	TileX       int
+	TileY       int
+	Dir         string
+	MoveLimiter *game.MoveLimiter
+	Send        chan []byte
+	done        chan struct{}
+	doneOnce    sync.Once
 }
 
 func NewClient(userID int64, nickname string, avatarID *int64, roomID string) *Client {
 	return &Client{
-		UserID:   userID,
-		Nickname: nickname,
-		AvatarID: avatarID,
-		RoomID:   roomID,
-		Send:     make(chan []byte, 256),
-		done:     make(chan struct{}),
+		UserID:      userID,
+		Nickname:    nickname,
+		AvatarID:    avatarID,
+		RoomID:      roomID,
+		TileX:       game.SpawnTileX,
+		TileY:       game.SpawnTileY,
+		Dir:         "down",
+		MoveLimiter: game.NewMoveLimiter(time.Now()),
+		Send:        make(chan []byte, 256),
+		done:        make(chan struct{}),
 	}
 }
 
@@ -163,14 +174,17 @@ func (h *Hub) ReleaseAgentSlot(roomID string, slot int) {
 	}
 }
 
-// CommitAgent는 예약한 슬롯에 에이전트를 확정 등록한다
-func (h *Hub) CommitAgent(roomID string, state *AgentState) {
+// CommitAgent는 예약한 슬롯에 에이전트를 확정 등록한다.
+// 방이 이미 정리됐으면(전원 퇴장) false를 반환한다 — 호출자가 외부 세션을 정리해야 한다.
+func (h *Hub) CommitAgent(roomID string, state *AgentState) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if r, ok := h.rooms[roomID]; ok {
 		delete(r.reservedSlots, state.Slot)
 		r.agents[state.AgentID] = state
+		return true
 	}
+	return false
 }
 
 // RemoveAgent는 룸에서 특정 에이전트를 제거하고 반환한다

@@ -5,6 +5,7 @@ type ClientMessage struct {
 	Type    string   `json:"type"`
 	X       *float64 `json:"x"`
 	Y       *float64 `json:"y"`
+	Dir     string   `json:"dir"` // move: up/down/left/right
 	Content string   `json:"content"`
 	Role    string   `json:"role"`    // summon_agent
 	AgentID string   `json:"agentId"` // dismiss_agent, agent_input
@@ -16,8 +17,9 @@ type ClientMessage struct {
 type PresenceEvent struct {
 	Type     string  `json:"type"`
 	UserID   int64   `json:"userId"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
+	X        float64 `json:"x"` // 타일 좌표 (0 ≤ x < game.MapCols)
+	Y        float64 `json:"y"` // 타일 좌표 (0 ≤ y < game.MapRows)
+	Dir      string  `json:"dir"`
 	Nickname string  `json:"nickname"`
 	AvatarID *int64  `json:"avatarId"`
 }

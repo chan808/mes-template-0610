@@ -45,7 +45,7 @@ CREATE INDEX idx_rooms_invite_token ON rooms(invite_token);
 
 | Key | Type | TTL | 용도 |
 |---|---|---|---|
-| `presence:{roomId}:{userId}` | String (JSON) | 30s | 위치 {x,y,nickname,avatarId} |
+| `presence:{roomId}:{userId}` | String (JSON) | 30s | 타일 위치 {x,y,dir,nickname,avatarId} |
 | `room:members:{roomId}` | Set | - | 현재 접속자 |
 | `RT:{sid}` | String (JSON) | 7d | Refresh Token 세션 |
 | `USER_SESSIONS:{userId}` | Set | 30d | 사용자별 세션 SID 인덱스 |
@@ -147,7 +147,7 @@ GET    /health
 
 ```
 client → server
-  move          {x, y}
+  move          {x, y, dir}                  -- 타일 좌표 + 방향 (up|down|left|right)
   chat          {content}
   ping          {}
   summon_agent  {role: "helper"|"summarizer"|"researcher"|"critic"|"orchestrator"}
@@ -155,7 +155,7 @@ client → server
   agent_input   {agentId, response}          -- HitL 사용자 응답
 
 server → client
-  presence          {userId, x, y, nickname, avatarId}
+  presence          {userId, x, y, dir, nickname, avatarId}
   chat              {messageId, userId, content, createdAt}
   join              {userId, nickname}
   leave             {userId}
@@ -171,6 +171,22 @@ server → client
 
 채팅 → 에이전트 라우팅: 메시지에 등록된 에이전트 닉네임과 일치하는 `@닉네임`이 있으면
 해당 에이전트에게만, 없으면(무관한 `@` 포함) 모든 에이전트에게 전달한다.
+
+---
+
+## Movement (타일 좌표계)
+
+좌표는 픽셀이 아닌 타일 단위다. 맵 30×20 타일, 타일 1칸 = 40px (캔버스 1200×800).
+관련 코드: `realtime/game/movement.go`, `frontend/src/features/room/lib/tile.ts` — 상수를 양쪽에서 일치시킬 것.
+
+- 스폰 위치: (15, 10). 클라이언트는 입장 시 서버가 브로드캐스트하는 자신의 presence를 권위 위치로 채택
+- 이동 단위: 4방향(상하좌우) 한 칸. 클라이언트는 한 칸을 160ms에 보간 렌더링하고 칸 확정 시점에 move 1회 전송
+- 서버 검증 (Go가 권위, 게임 모드 판정의 기반):
+  - 범위: 0 ≤ x < 30, 0 ≤ y < 20, 정수만 허용
+  - 인접성: 직전 위치에서 상하좌우 1칸만 허용 (대각선·순간이동 거부)
+  - 속도: 토큰 버킷 (회복 주기 140ms, 버스트 3) — 과속·치팅 차단
+  - 검증 실패 시 해당 클라이언트에게만 서버 권위 위치 presence를 회신 → 클라이언트가 두 칸 이상 어긋나면 스냅 보정
+- 캐릭터끼리는 충돌하지 않음 (통로 막힘 방지). 지형 충돌만 존재하며 충돌 맵은 클라이언트 `lib/maps.ts` (현재 빈 맵, 벽·가구는 맵 데이터 도입 시)
 
 ---
 
@@ -193,6 +209,7 @@ JWT claims: `sub(userId), role, tokenVersion, iat, exp`
 - 초대 토큰 재생성 시 기존 토큰 즉시 무효화 (경고 필요)
 - 방 삭제: 소프트 삭제 → 30일 후 배치 물리 삭제 (`@Scheduled`)
 - presence 30s TTL: 클라이언트 20s마다 ping으로 갱신
+- 이동은 서버 권위: 타일 범위·인접성·속도 검증을 통과한 move만 반영 (Movement 섹션 참고)
 
 ---
 
@@ -267,7 +284,7 @@ agolive-agent (Python/FastAPI) — 구현 완료
 - 소환 시 최근 채팅 컨텍스트를 Spring에서 로드하여 system prompt에 반영
 - 사용자 메시지마다 Claude Haiku (`claude-haiku-4-5-20251001`)로 SSE 스트리밍 응답
 - 대화 히스토리 최대 40턴 유지 (초과 시 오래된 것부터 제거, 짝수 쌍 유지)
-- 에이전트 고정 위치: x=900, y=200
+- 에이전트 고정 타일 위치: 슬롯 순서대로 (22,5), (17,5), (22,12), (17,12)
 - 마지막 클라이언트 퇴장 시 고아 에이전트 자동 정리 (Hub.Leave → cleanupAgent)
 - Go에서 SSE 스트리밍 수신 시 별도 `agentC` (timeout 없음) 사용
 

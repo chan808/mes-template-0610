@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chan808/agolive-realtime/config"
+	"github.com/chan808/agolive-realtime/game"
 	"github.com/chan808/agolive-realtime/hub"
 	"github.com/chan808/agolive-realtime/model"
 	"github.com/coder/websocket"
@@ -24,9 +25,9 @@ const maxAgentsPerRoom = 4
 // HitL 사용자 응답 대기 한도 — Python tool_result 대기(180s)보다 짧아야 응답 유실이 없다
 const humanInputTimeout = 120 * time.Second
 
-// 에이전트 아바타 위치 (슬롯 인덱스 기반, 겹침 방지)
+// 에이전트 아바타 타일 위치 (슬롯 인덱스 기반, 겹침 방지)
 var agentPositions = [][2]float64{
-	{900, 200}, {700, 200}, {900, 500}, {700, 500},
+	{22, 5}, {17, 5}, {22, 12}, {17, 12},
 }
 
 type Handler struct {
@@ -155,9 +156,6 @@ func writePump(ctx context.Context, conn *websocket.Conn, c *hub.Client) {
 	}
 }
 
-const initialX = 600.0
-const initialY = 400.0
-
 func (h *Handler) enter(ctx context.Context, c *hub.Client) {
 	h.rdb.SAdd(ctx, "room:members:"+c.RoomID, c.UserID)
 	h.hub.Join(c)
@@ -165,12 +163,9 @@ func (h *Handler) enter(ctx context.Context, c *hub.Client) {
 	// 입장 이벤트 브로드캐스트
 	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.JoinEvent{Type: "join", UserID: c.UserID, Nickname: c.Nickname}))
 
-	// 신규 입장자 초기 위치를 기존 접속자에게 브로드캐스트
-	presenceVal, _ := json.Marshal(map[string]any{"x": initialX, "y": initialY, "nickname": c.Nickname, "avatarId": c.AvatarID})
-	h.rdb.Set(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), presenceVal, 30*time.Second)
-	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.PresenceEvent{
-		Type: "presence", UserID: c.UserID, X: initialX, Y: initialY, Nickname: c.Nickname, AvatarID: c.AvatarID,
-	}))
+	// 신규 입장자 스폰 위치를 저장하고 브로드캐스트 (본인 포함 — 클라이언트는 이를 권위 위치로 채택)
+	h.savePresence(ctx, c)
+	h.hub.Publish(ctx, c.RoomID, presenceEventOf(c))
 
 	// 기존 접속자 위치를 신규 입장자에게 전송
 	h.sendExistingPresences(ctx, c)
@@ -207,6 +202,7 @@ func (h *Handler) sendExistingPresences(ctx context.Context, c *hub.Client) {
 			var p struct {
 				X        float64 `json:"x"`
 				Y        float64 `json:"y"`
+				Dir      string  `json:"dir"`
 				Nickname string  `json:"nickname"`
 				AvatarID *int64  `json:"avatarId"`
 			}
@@ -214,7 +210,7 @@ func (h *Handler) sendExistingPresences(ctx context.Context, c *hub.Client) {
 				continue
 			}
 			sendToClient(c, mustMarshal(model.PresenceEvent{
-				Type: "presence", UserID: userID, X: p.X, Y: p.Y, Nickname: p.Nickname, AvatarID: p.AvatarID,
+				Type: "presence", UserID: userID, X: p.X, Y: p.Y, Dir: p.Dir, Nickname: p.Nickname, AvatarID: p.AvatarID,
 			}))
 		}
 		if next == 0 {
@@ -287,18 +283,38 @@ func (h *Handler) handleMove(ctx context.Context, c *hub.Client, msg model.Clien
 		sendError(c, "INVALID_PAYLOAD", "잘못된 move 페이로드입니다.")
 		return
 	}
+	toX, okX := game.ParseTileCoord(*msg.X)
+	toY, okY := game.ParseTileCoord(*msg.Y)
+	if !okX || !okY || !game.IsValidDir(msg.Dir) {
+		sendError(c, "INVALID_PAYLOAD", "잘못된 move 페이로드입니다.")
+		return
+	}
 
-	// presence 저장 (TTL 30s)
+	// 인접성·범위·속도 검증 실패 시 서버 권위 위치를 회신해 클라이언트가 스스로 보정하게 한다
+	if !game.CanMove(c.TileX, c.TileY, toX, toY) || !c.MoveLimiter.Allow(time.Now()) {
+		sendToClient(c, presenceEventOf(c))
+		return
+	}
+
+	c.TileX, c.TileY, c.Dir = toX, toY, msg.Dir
+	h.savePresence(ctx, c)
+	h.hub.Publish(ctx, c.RoomID, presenceEventOf(c))
+}
+
+// savePresence는 클라이언트의 서버 권위 위치를 Redis에 저장한다 (TTL 30s)
+func (h *Handler) savePresence(ctx context.Context, c *hub.Client) {
 	presenceVal, _ := json.Marshal(map[string]any{
-		"x": *msg.X, "y": *msg.Y, "nickname": c.Nickname, "avatarId": c.AvatarID,
+		"x": c.TileX, "y": c.TileY, "dir": c.Dir, "nickname": c.Nickname, "avatarId": c.AvatarID,
 	})
 	h.rdb.Set(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), presenceVal, 30*time.Second)
+}
 
-	broadcast := mustMarshal(model.PresenceEvent{
-		Type: "presence", UserID: c.UserID, X: *msg.X, Y: *msg.Y,
-		Nickname: c.Nickname, AvatarID: c.AvatarID,
+// presenceEventOf는 클라이언트의 서버 권위 위치로 presence 이벤트를 만든다
+func presenceEventOf(c *hub.Client) []byte {
+	return mustMarshal(model.PresenceEvent{
+		Type: "presence", UserID: c.UserID, X: float64(c.TileX), Y: float64(c.TileY),
+		Dir: c.Dir, Nickname: c.Nickname, AvatarID: c.AvatarID,
 	})
-	h.hub.Publish(ctx, c.RoomID, broadcast)
 }
 
 func (h *Handler) handleChat(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
@@ -329,17 +345,36 @@ func (h *Handler) handleChat(ctx context.Context, c *hub.Client, msg model.Clien
 // selectAgentTargets는 메시지를 전달할 에이전트를 고른다.
 // 등록된 에이전트 닉네임과 일치하는 @멘션이 있으면 해당 에이전트만,
 // 없으면(이메일 등 무관한 @ 포함) 전체 에이전트를 반환한다.
+// 각 '@' 위치에서 가장 긴 닉네임 하나만 인정한다 ("@AI 도우미 2"가 "AI 도우미"에 중복 매칭되지 않게).
 func selectAgentTargets(content string, agents []*hub.AgentState) []*hub.AgentState {
+	mentionedIDs := make(map[string]bool)
+	for i := 0; i < len(content); i++ {
+		if content[i] != '@' {
+			continue
+		}
+		rest := content[i+1:]
+		var best *hub.AgentState
+		for _, a := range agents {
+			if strings.HasPrefix(rest, a.Nickname) {
+				if best == nil || len(a.Nickname) > len(best.Nickname) {
+					best = a
+				}
+			}
+		}
+		if best != nil {
+			mentionedIDs[best.AgentID] = true
+		}
+	}
+	if len(mentionedIDs) == 0 {
+		return agents
+	}
 	var mentioned []*hub.AgentState
 	for _, a := range agents {
-		if strings.Contains(content, "@"+a.Nickname) {
+		if mentionedIDs[a.AgentID] {
 			mentioned = append(mentioned, a)
 		}
 	}
-	if len(mentioned) > 0 {
-		return mentioned
-	}
-	return agents
+	return mentioned
 }
 
 func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
@@ -407,7 +442,12 @@ func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg mode
 		CancelFn:     cancelFn,
 		HumanInputCh: make(chan string, 1),
 	}
-	h.hub.CommitAgent(c.RoomID, state)
+	// 소환 도중 방이 정리됐으면 Python 세션도 함께 정리 (고아 세션 방지)
+	if !h.hub.CommitAgent(c.RoomID, state) {
+		cancelFn()
+		go h.cleanupAgentSession(result.AgentID)
+		return
+	}
 
 	h.hub.Publish(ctx, c.RoomID, mustMarshal(model.AgentJoinedEvent{
 		Type: "agent_joined", AgentID: result.AgentID, Role: result.Role,
@@ -741,7 +781,12 @@ func (h *Handler) executeDelegateToWorker(ctx context.Context, roomID, orchestra
 		CancelFn:     cancelFn,
 		HumanInputCh: make(chan string, 1),
 	}
-	h.hub.CommitAgent(roomID, workerState)
+	// 위임 도중 방이 정리됐으면 워커 세션도 함께 정리
+	if !h.hub.CommitAgent(roomID, workerState) {
+		cancelFn()
+		go h.cleanupAgentSession(workerInfo.AgentID)
+		return "워커 소환 실패: 방이 종료되었습니다"
+	}
 	h.hub.Publish(ctx, roomID, mustMarshal(model.AgentJoinedEvent{
 		Type: "agent_joined", AgentID: workerInfo.AgentID,
 		Role: workerInfo.Role, Nickname: workerInfo.Nickname, X: x, Y: y,
