@@ -4,7 +4,13 @@ import java.time.OffsetDateTime
 
 // internal 등 타 모듈에서 메시지 저장/조회 시 사용하는 공개 API
 interface MessageApi {
-    fun save(roomId: Long, userId: Long?, content: String, type: MessageType = MessageType.chat): MessageRecord
+    fun save(
+        roomId: Long,
+        userId: Long?,
+        content: String,
+        type: MessageType = MessageType.chat,
+        agentNickname: String? = null,
+    ): MessageRecord
     fun getRecentMessages(roomId: Long, limit: Int): List<MessageRecord>
 }
 
@@ -15,4 +21,5 @@ data class MessageRecord(
     val content: String,
     val type: MessageType,
     val createdAt: OffsetDateTime,
+    val agentNickname: String? = null,
 )

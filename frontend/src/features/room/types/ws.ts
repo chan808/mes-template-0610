@@ -1,6 +1,8 @@
-// 클라이언트 → 서버 메시지
+import { Direction } from "../lib/tile";
+
+// 클라이언트 → 서버 메시지 (x, y는 타일 좌표)
 export type ClientMessage =
-  | { type: "move"; x: number; y: number }
+  | { type: "move"; x: number; y: number; dir: Direction }
   | { type: "chat"; content: string }
   | { type: "ping" }
   | { type: "summon_agent"; role: AgentRole }
@@ -9,9 +11,9 @@ export type ClientMessage =
 
 export type AgentRole = "helper" | "summarizer" | "researcher" | "critic" | "orchestrator";
 
-// 서버 → 클라이언트 메시지
+// 서버 → 클라이언트 메시지 (x, y는 타일 좌표)
 export type ServerMessage =
-  | { type: "presence"; userId: number; x: number; y: number; nickname: string; avatarId: number | null }
+  | { type: "presence"; userId: number; x: number; y: number; dir: Direction; nickname: string; avatarId: number | null }
   | { type: "chat"; messageId: number; userId: number; content: string; createdAt: string }
   | { type: "join"; userId: number; nickname: string }
   | { type: "leave"; userId: number }
@@ -28,8 +30,9 @@ export type WsStatus = "disconnected" | "connecting" | "connected" | "error";
 
 export interface PresenceEntry {
   userId: number;
-  x: number;
-  y: number;
+  x: number; // 타일 좌표
+  y: number; // 타일 좌표
+  dir: Direction;
   nickname: string;
   avatarId: number | null;
 }

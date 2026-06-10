@@ -33,6 +33,10 @@ class Message(
     @Column(nullable = false, length = 20)
     val type: MessageType = MessageType.chat,
 
+    // 에이전트 메시지 표시용 닉네임 (type=agent일 때만 사용)
+    @Column(name = "agent_nickname", nullable = true, length = 50)
+    val agentNickname: String? = null,
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,

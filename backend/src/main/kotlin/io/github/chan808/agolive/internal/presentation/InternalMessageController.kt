@@ -27,7 +27,7 @@ class InternalMessageController(private val messageApi: MessageApi) {
         @PathVariable roomId: Long,
         @RequestBody @Valid request: SaveMessageRequest,
     ): ResponseEntity<ApiResponse<MessageRecord>> {
-        val record = messageApi.save(roomId, request.userId, request.content, request.type)
+        val record = messageApi.save(roomId, request.userId, request.content, request.type, request.agentNickname)
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(record))
     }
 
@@ -43,7 +43,10 @@ class InternalMessageController(private val messageApi: MessageApi) {
 
 data class SaveMessageRequest(
     val userId: Long?,
-    @field:NotBlank @field:Size(max = 2000)
+    @field:NotBlank @field:Size(max = 4000)
     val content: String,
     val type: MessageType = MessageType.chat,
+    // type=agent일 때 표시용 닉네임
+    @field:Size(max = 50)
+    val agentNickname: String? = null,
 )

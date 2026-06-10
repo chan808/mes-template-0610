@@ -11,6 +11,7 @@ data class MessageResponse(
     val content: String,
     val type: MessageType,
     val createdAt: OffsetDateTime,
+    val agentNickname: String? = null,
 ) {
     companion object {
         fun from(message: Message) = MessageResponse(
@@ -20,6 +21,7 @@ data class MessageResponse(
             content = message.content,
             type = message.type,
             createdAt = message.createdAt,
+            agentNickname = message.agentNickname,
         )
     }
 }

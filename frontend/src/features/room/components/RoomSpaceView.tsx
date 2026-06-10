@@ -16,7 +16,7 @@ interface RoomSpaceViewProps {
 }
 
 function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUserId: number; myNickname: string }) {
-  const { send } = useWebSocket(roomId);
+  const { send } = useWebSocket(roomId, myUserId);
 
   return (
     <>
