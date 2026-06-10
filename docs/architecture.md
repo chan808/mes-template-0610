@@ -150,6 +150,7 @@ client → server
   move          {x, y, dir}                  -- 타일 좌표 + 방향 (up|down|left|right)
   chat          {content}
   ping          {}
+  whisper       {targetUserId, content}      -- 1:1 귓속말 (ADR-0002)
   summon_agent  {role: "helper"|"summarizer"|"researcher"|"critic"|"orchestrator"}
   dismiss_agent {agentId}
   agent_input   {agentId, response}          -- HitL 사용자 응답
@@ -160,6 +161,7 @@ server → client
   join              {userId, nickname}
   leave             {userId}
   pong              {}
+  whisper           {fromUserId, toUserId, nickname, content, createdAt}  -- 발신자+수신자에게만
   error             {code, message}
   agent_joined      {agentId, role, nickname, x, y}   -- 신규 입장자에게도 활성 에이전트 수만큼 재전송
   agent_left        {agentId}
@@ -171,6 +173,11 @@ server → client
 
 채팅 → 에이전트 라우팅: 메시지에 등록된 에이전트 닉네임과 일치하는 `@닉네임`이 있으면
 해당 에이전트에게만, 없으면(무관한 `@` 포함) 모든 에이전트에게 전달한다.
+에이전트 아바타 더블클릭은 `@닉네임` 자동 삽입 단축키 (프론트 전용, ADR-0002).
+
+귓속말(whisper): DB 미저장 휘발성, 발신자+수신자에게만 전송 (Pub/Sub 미경유 hub 직접 전송).
+content 최대 500자(rune). 대상 부재 시 `error {code: WHISPER_TARGET_NOT_FOUND}`,
+자기 자신 대상 시 `error {code: WHISPER_SELF}`. 상세는 `docs/adr/0002-whisper-ephemeral.md`.
 
 ---
 
@@ -209,6 +216,7 @@ JWT claims: `sub(userId), role, tokenVersion, iat, exp`
 - 초대 토큰 재생성 시 기존 토큰 즉시 무효화 (경고 필요)
 - 방 삭제: 소프트 삭제 → 30일 후 배치 물리 삭제 (`@Scheduled`)
 - presence 30s TTL: 클라이언트 20s마다 ping으로 갱신
+- 귓속말은 DB 미저장 (휘발성) — 같은 방 접속자에게만 가능, 새로고침 시 소실 (ADR-0002)
 - 이동은 서버 권위: 타일 범위·인접성·속도 검증을 통과한 move만 반영 (Movement 섹션 참고)
 
 ---

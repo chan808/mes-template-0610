@@ -265,6 +265,8 @@ func (h *Handler) handleMessage(ctx context.Context, c *hub.Client, data []byte)
 		h.handleMove(ctx, c, msg)
 	case "chat":
 		h.handleChat(ctx, c, msg)
+	case "whisper":
+		h.handleWhisper(c, msg)
 	case "ping":
 		h.handlePing(ctx, c)
 	case "summon_agent":
@@ -377,6 +379,41 @@ func selectAgentTargets(content string, agents []*hub.AgentState) []*hub.AgentSt
 		}
 	}
 	return mentioned
+}
+
+const maxWhisperRunes = 500
+
+// validateWhisper는 귓속말 페이로드를 검증하고 실패 시 에러 코드와 메시지를 반환한다
+func validateWhisper(targetUserID *int64, content string, selfID int64) (string, string, bool) {
+	if targetUserID == nil || content == "" || len([]rune(content)) > maxWhisperRunes {
+		return "INVALID_PAYLOAD", "잘못된 whisper 페이로드입니다.", false
+	}
+	if *targetUserID == selfID {
+		return "WHISPER_SELF", "자기 자신에게는 귓속말을 보낼 수 없습니다.", false
+	}
+	return "", "", true
+}
+
+// handleWhisper는 귓속말을 수신자와 발신자에게만 직접 전송한다 (DB 미저장, ADR-0002)
+func (h *Handler) handleWhisper(c *hub.Client, msg model.ClientMessage) {
+	code, errMsg, ok := validateWhisper(msg.TargetUserID, msg.Content, c.UserID)
+	if !ok {
+		sendError(c, code, errMsg)
+		return
+	}
+
+	data := mustMarshal(model.WhisperEvent{
+		Type: "whisper", FromUserID: c.UserID, ToUserID: *msg.TargetUserID,
+		Nickname: c.Nickname, Content: msg.Content,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	// Blue/Green 스왑 중 다른 인스턴스에 붙은 대상은 못 찾는다 — 침묵 유실 대신 명시적 에러 회신
+	if !h.hub.SendToUser(c.RoomID, *msg.TargetUserID, data) {
+		sendError(c, "WHISPER_TARGET_NOT_FOUND", "대상이 방에 없습니다.")
+		return
+	}
+	// 발신자에게 에코 — 발신 클라이언트가 자신의 말풍선을 렌더링
+	sendToClient(c, data)
 }
 
 func (h *Handler) handleSummonAgent(ctx context.Context, c *hub.Client, msg model.ClientMessage) {
