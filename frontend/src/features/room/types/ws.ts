@@ -4,6 +4,7 @@ import { Direction } from "../lib/tile";
 export type ClientMessage =
   | { type: "move"; x: number; y: number; dir: Direction }
   | { type: "chat"; content: string }
+  | { type: "whisper"; targetUserId: number; content: string }
   | { type: "ping" }
   | { type: "summon_agent"; role: AgentRole }
   | { type: "dismiss_agent"; agentId: string }
@@ -15,6 +16,7 @@ export type AgentRole = "helper" | "summarizer" | "researcher" | "critic" | "orc
 export type ServerMessage =
   | { type: "presence"; userId: number; x: number; y: number; dir: Direction; nickname: string; avatarId: number | null }
   | { type: "chat"; messageId: number; userId: number; content: string; createdAt: string }
+  | { type: "whisper"; fromUserId: number; toUserId: number; nickname: string; content: string; createdAt: string }
   | { type: "join"; userId: number; nickname: string }
   | { type: "leave"; userId: number }
   | { type: "pong" }
@@ -48,6 +50,8 @@ export interface AgentEntry {
 // 채팅 패널에서 사용하는 통합 메시지 타입
 export type DisplayMessage =
   | { id: string; type: "chat"; userId: number; nickname: string; content: string; createdAt: string }
+  // nickname은 발신자, toNickname은 수신자 표시용 (수신 시점에 캐시에서 확정)
+  | { id: string; type: "whisper"; fromUserId: number; toUserId: number; nickname: string; toNickname: string; content: string; createdAt: string }
   | { id: string; type: "system"; content: string; createdAt: string }
   | { id: string; type: "agent"; agentId: string; nickname: string; content: string; createdAt: string; streaming: boolean }
   | { id: string; type: "file"; agentId: string; nickname: string; filename: string; url: string; mimeType: string; createdAt: string };

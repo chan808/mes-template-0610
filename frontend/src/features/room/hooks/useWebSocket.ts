@@ -6,6 +6,7 @@ import { useAuthStore } from "@/features/auth/stores/authStore";
 import { useWsStore } from "../stores/wsStore";
 import { usePresenceStore } from "../stores/presenceStore";
 import { useChatStore } from "../stores/chatStore";
+import { useComposerStore } from "../stores/composerStore";
 import { ClientMessage, ServerMessage } from "../types/ws";
 
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8081";
@@ -61,6 +62,21 @@ export function useWebSocket(roomId: number, myUserId: number) {
           });
           break;
 
+        case "whisper":
+          // 발신자와 수신자에게만 도착하는 이벤트 — 수신 시점에 수신자 닉네임을 캐시에서 확정
+          cacheNickname(msg.fromUserId, msg.nickname);
+          appendMessage({
+            id: `whisper-${msg.fromUserId}-${Date.now()}`,
+            type: "whisper",
+            fromUserId: msg.fromUserId,
+            toUserId: msg.toUserId,
+            nickname: msg.nickname,
+            toNickname: msg.toUserId === myUserId ? "나" : getNickname(msg.toUserId),
+            content: msg.content,
+            createdAt: msg.createdAt,
+          });
+          break;
+
         case "join":
           cacheNickname(msg.userId, msg.nickname);
           appendMessage({
@@ -72,6 +88,11 @@ export function useWebSocket(roomId: number, myUserId: number) {
           break;
 
         case "leave": {
+          // 귓속말 타겟이 퇴장하면 타겟 해제 (잘못된 대상 전송 방지)
+          const composerTarget = useComposerStore.getState().target;
+          if (composerTarget?.kind === "user" && composerTarget.userId === msg.userId) {
+            useComposerStore.getState().clearTarget();
+          }
           const nickname = getNickname(msg.userId);
           appendMessage({
             id: `leave-${msg.userId}-${Date.now()}`,
@@ -96,6 +117,11 @@ export function useWebSocket(roomId: number, myUserId: number) {
         case "agent_left": {
           const agent = usePresenceStore.getState().agents.get(msg.agentId);
           const agentName = agent?.nickname ?? "AI 에이전트";
+          // 멘션 타겟이던 에이전트가 퇴장하면 타겟 해제
+          const agentTarget = useComposerStore.getState().target;
+          if (agentTarget?.kind === "agent" && agentTarget.nickname === agent?.nickname) {
+            useComposerStore.getState().clearTarget();
+          }
           removeAgent(msg.agentId);
           // HitL 다이얼로그가 열려있던 에이전트가 퇴장하면 닫기
           const current = useWsStore.getState().humanInputRequest;
@@ -249,6 +275,8 @@ export function useWebSocket(roomId: number, myUserId: number) {
     unmountedRef.current = false;
     clearPresence();
     clearChat();
+    // 방 입장/이동 시 이전 방의 채팅 타겟 제거
+    useComposerStore.getState().clearTarget();
     connect();
 
     return () => {

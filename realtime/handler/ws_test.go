@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/chan808/agolive-realtime/hub"
@@ -74,4 +75,52 @@ func Test_짧은닉네임멘션_번호닉네임_미매칭(t *testing.T) {
 
 	assert.Len(t, targets, 1)
 	assert.Equal(t, "AI 도우미", targets[0].Nickname)
+}
+
+func int64Ptr(v int64) *int64 { return &v }
+
+func Test_정상귓속말_검증통과(t *testing.T) {
+	code, _, ok := validateWhisper(int64Ptr(20), "안녕", 10)
+
+	assert.True(t, ok)
+	assert.Empty(t, code)
+}
+
+func Test_타겟없는귓속말_검증실패(t *testing.T) {
+	code, _, ok := validateWhisper(nil, "안녕", 10)
+
+	assert.False(t, ok)
+	assert.Equal(t, "INVALID_PAYLOAD", code)
+}
+
+func Test_빈내용귓속말_검증실패(t *testing.T) {
+	code, _, ok := validateWhisper(int64Ptr(20), "", 10)
+
+	assert.False(t, ok)
+	assert.Equal(t, "INVALID_PAYLOAD", code)
+}
+
+func Test_길이초과귓속말_검증실패(t *testing.T) {
+	// 500자(rune) 초과는 거부 — 멀티바이트 기준으로 센다
+	long := strings.Repeat("가", 501)
+
+	code, _, ok := validateWhisper(int64Ptr(20), long, 10)
+
+	assert.False(t, ok)
+	assert.Equal(t, "INVALID_PAYLOAD", code)
+}
+
+func Test_길이상한귓속말_검증통과(t *testing.T) {
+	exact := strings.Repeat("가", 500)
+
+	_, _, ok := validateWhisper(int64Ptr(20), exact, 10)
+
+	assert.True(t, ok)
+}
+
+func Test_자기자신귓속말_검증실패(t *testing.T) {
+	code, _, ok := validateWhisper(int64Ptr(10), "안녕", 10)
+
+	assert.False(t, ok)
+	assert.Equal(t, "WHISPER_SELF", code)
 }

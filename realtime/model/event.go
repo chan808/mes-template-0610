@@ -2,14 +2,15 @@ package model
 
 // 클라이언트 → 서버 (flat)
 type ClientMessage struct {
-	Type    string   `json:"type"`
-	X       *float64 `json:"x"`
-	Y       *float64 `json:"y"`
-	Dir     string   `json:"dir"` // move: up/down/left/right
-	Content string   `json:"content"`
-	Role    string   `json:"role"`    // summon_agent
-	AgentID string   `json:"agentId"` // dismiss_agent, agent_input
-	Response string  `json:"response"` // agent_input
+	Type         string   `json:"type"`
+	X            *float64 `json:"x"`
+	Y            *float64 `json:"y"`
+	Dir          string   `json:"dir"` // move: up/down/left/right
+	Content      string   `json:"content"`
+	Role         string   `json:"role"`         // summon_agent
+	AgentID      string   `json:"agentId"`      // dismiss_agent, agent_input
+	Response     string   `json:"response"`     // agent_input
+	TargetUserID *int64   `json:"targetUserId"` // whisper
 }
 
 // 서버 → 클라이언트 (flat, per-type structs)
@@ -30,6 +31,16 @@ type ChatEvent struct {
 	UserID    int64  `json:"userId"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// 귓속말 — 발신자와 수신자에게만 전송, DB 미저장 (ADR-0002)
+type WhisperEvent struct {
+	Type       string `json:"type"`
+	FromUserID int64  `json:"fromUserId"`
+	ToUserID   int64  `json:"toUserId"`
+	Nickname   string `json:"nickname"` // 발신자 닉네임
+	Content    string `json:"content"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 type JoinEvent struct {

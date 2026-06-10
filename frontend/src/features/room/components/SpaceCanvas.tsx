@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { usePresenceStore } from "../stores/presenceStore";
+import { useComposerStore } from "../stores/composerStore";
 import { useTileMovement } from "../hooks/useTileMovement";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, Direction, MOVE_MS, TILE_SIZE, tileToPixel } from "../lib/tile";
 import { ClientMessage } from "../types/ws";
@@ -34,18 +35,29 @@ interface SpaceCanvasProps {
 export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanvasProps) {
   useTileMovement(onSend);
   const { presences, agents, myTile, myDir } = usePresenceStore();
+  const setTarget = useComposerStore((s) => s.setTarget);
 
   const allAvatars = [
     // 내 아바타
-    { key: `user-${myUserId}`, tile: myTile, dir: myDir as Direction | null, nickname: myNickname, colorSeed: myUserId, isMe: true, isAgent: false },
+    { key: `user-${myUserId}`, tile: myTile, dir: myDir as Direction | null, nickname: myNickname, colorSeed: myUserId, isMe: true, isAgent: false, userId: myUserId },
     // 다른 유저 아바타
     ...[...presences.values()]
       .filter((p) => p.userId !== myUserId)
-      .map((p) => ({ key: `user-${p.userId}`, tile: { x: p.x, y: p.y }, dir: p.dir as Direction | null, nickname: p.nickname, colorSeed: p.avatarId ?? p.userId, isMe: false, isAgent: false })),
+      .map((p) => ({ key: `user-${p.userId}`, tile: { x: p.x, y: p.y }, dir: p.dir as Direction | null, nickname: p.nickname, colorSeed: p.avatarId ?? p.userId, isMe: false, isAgent: false, userId: p.userId })),
     // 에이전트 아바타 (방향 없음)
     ...[...agents.values()]
-      .map((a) => ({ key: `agent-${a.agentId}`, tile: { x: a.x, y: a.y }, dir: null as Direction | null, nickname: a.nickname, colorSeed: 0, isMe: false, isAgent: true })),
+      .map((a) => ({ key: `agent-${a.agentId}`, tile: { x: a.x, y: a.y }, dir: null as Direction | null, nickname: a.nickname, colorSeed: 0, isMe: false, isAgent: true, userId: null as number | null })),
   ];
+
+  // 더블클릭으로 채팅 타겟 설정: 유저 → 귓속말 모드, 에이전트 → @멘션 타겟 (ADR-0002)
+  function handleAvatarDoubleClick(avatar: (typeof allAvatars)[number]) {
+    if (avatar.isMe) return;
+    if (avatar.isAgent) {
+      setTarget({ kind: "agent", nickname: avatar.nickname });
+    } else if (avatar.userId !== null) {
+      setTarget({ kind: "user", userId: avatar.userId, nickname: avatar.nickname });
+    }
+  }
 
   return (
     <div
@@ -71,7 +83,9 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         return (
           <div
             key={avatar.key}
-            className="absolute flex flex-col items-center"
+            className={`absolute flex flex-col items-center ${avatar.isMe ? "" : "cursor-pointer"}`}
+            onDoubleClick={() => handleAvatarDoubleClick(avatar)}
+            title={avatar.isMe ? undefined : avatar.isAgent ? "더블클릭: 이 에이전트에게만 말하기" : "더블클릭: 귓속말"}
             style={{
               transform: `translate(${px - AVATAR_SIZE / 2}px, ${py - AVATAR_SIZE / 2}px)`,
               transition: `transform ${MOVE_MS}ms linear`,

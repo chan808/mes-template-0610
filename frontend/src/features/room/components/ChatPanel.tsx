@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useChatStore } from "../stores/chatStore";
+import { useComposerStore } from "../stores/composerStore";
 import { useMessageHistory } from "../hooks/useMessages";
 import { ClientMessage } from "../types/ws";
 
@@ -13,6 +14,7 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) {
   const { messages, hasMore } = useChatStore();
+  const { target, clearTarget } = useComposerStore();
   const { loadMore, isFetching } = useMessageHistory(roomId);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -38,7 +40,15 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
   function handleSend() {
     const content = input.trim();
     if (!content) return;
-    onSend({ type: "chat", content });
+    if (target?.kind === "user") {
+      // 귓속말: 타겟에게만 전송 (서버가 발신자에게 에코)
+      onSend({ type: "whisper", targetUserId: target.userId, content });
+    } else if (target?.kind === "agent") {
+      // 에이전트 타겟: 기존 @멘션 라우팅 재사용 (대화는 방 전체 공개)
+      onSend({ type: "chat", content: `@${target.nickname} ${content}` });
+    } else {
+      onSend({ type: "chat", content });
+    }
     setInput("");
   }
 
@@ -46,6 +56,9 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+    if (e.key === "Escape") {
+      clearTarget();
     }
   }
 
@@ -78,6 +91,29 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
                 <span className="rounded-full bg-muted px-3 py-0.5 text-xs text-muted-foreground">
                   {msg.content}
                 </span>
+              </div>
+            );
+          }
+
+          if (msg.type === "whisper") {
+            const isMine = msg.fromUserId === myUserId;
+            return (
+              <div key={msg.id} className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
+                <span className="px-1 text-xs font-medium text-fuchsia-400">
+                  {isMine ? `귓속말 → ${msg.toNickname}` : `귓속말 ← ${msg.nickname}`}
+                </span>
+                <div className={`flex items-end gap-1 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                  <div
+                    className={`max-w-[200px] rounded-2xl border border-dashed border-fuchsia-500/60 bg-fuchsia-950/50 px-3 py-2 text-sm italic break-words text-fuchsia-100 ${
+                      isMine ? "rounded-br-sm" : "rounded-bl-sm"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {formatTime(msg.createdAt)}
+                  </span>
+                </div>
               </div>
             );
           }
@@ -149,13 +185,36 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
       </div>
 
       {/* 입력창 */}
-      <div className="border-t border-border p-3 flex gap-2">
+      <div className="border-t border-border p-3 flex flex-col gap-2">
+        {/* 타겟 칩: 더블클릭으로 설정된 귓속말/에이전트 타겟 표시, Esc 또는 ✕로 해제 */}
+        {target && (
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                target.kind === "user"
+                  ? "bg-fuchsia-950/60 text-fuchsia-300 border border-fuchsia-700"
+                  : "bg-violet-950/60 text-violet-300 border border-violet-700"
+              }`}
+            >
+              {target.kind === "user" ? `${target.nickname}에게 귓속말` : `@${target.nickname}에게만`}
+              <button
+                onClick={clearTarget}
+                aria-label="타겟 해제"
+                className="rounded-full hover:opacity-70"
+              >
+                ✕
+              </button>
+            </span>
+            <span className="text-[10px] text-muted-foreground">Esc로 해제</span>
+          </div>
+        )}
+        <div className="flex gap-2">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="메시지를 입력하세요..."
+          placeholder={target?.kind === "user" ? `${target.nickname}에게 귓속말...` : "메시지를 입력하세요..."}
           maxLength={500}
           className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
@@ -166,6 +225,7 @@ export default function ChatPanel({ roomId, myUserId, onSend }: ChatPanelProps) 
         >
           전송
         </button>
+        </div>
       </div>
     </div>
   );

@@ -138,6 +138,30 @@ func (h *Hub) Publish(ctx context.Context, roomID string, data []byte) {
 	h.rdb.Publish(ctx, "room:"+roomID, string(data))
 }
 
+// SendToUser는 룸에서 특정 userId의 모든 연결에 메시지를 직접 전송한다 (귓속말용, Pub/Sub 미경유)
+func (h *Hub) SendToUser(roomID string, userID int64, data []byte) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	r, ok := h.rooms[roomID]
+	if !ok {
+		return false
+	}
+	found := false
+	for c := range r.clients {
+		if c.UserID != userID {
+			continue
+		}
+		found = true
+		select {
+		case c.Send <- data:
+		default:
+			// 버퍼 가득 참: 메시지 드롭
+		}
+	}
+	return found
+}
+
 // TryReserveAgentSlot은 빈 에이전트 슬롯을 원자적으로 예약한다 (동시 소환 race 방지)
 func (h *Hub) TryReserveAgentSlot(roomID string, maxAgents int) (int, bool) {
 	h.mu.Lock()

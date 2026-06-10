@@ -137,6 +137,57 @@ func Test_방정리후_커밋_실패반환(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func Test_접속중인유저_타겟전송_성공(t *testing.T) {
+	h := newTestHub("1")
+	c := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[c] = true
+
+	ok := h.SendToUser("1", 10, []byte("hello"))
+
+	assert.True(t, ok)
+	assert.Equal(t, []byte("hello"), <-c.Send)
+}
+
+func Test_방에없는유저_타겟전송_실패(t *testing.T) {
+	h := newTestHub("1")
+	c := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[c] = true
+
+	ok := h.SendToUser("1", 99, []byte("hello"))
+
+	assert.False(t, ok)
+}
+
+func Test_다른방유저_타겟전송_실패(t *testing.T) {
+	h := newTestHub("1")
+	h.rooms["2"] = &roomState{
+		clients:       make(map[*Client]bool),
+		agents:        make(map[string]*AgentState),
+		reservedSlots: make(map[int]bool),
+	}
+	c := NewClient(10, "찬", nil, "2")
+	h.rooms["2"].clients[c] = true
+
+	ok := h.SendToUser("1", 10, []byte("hello"))
+
+	assert.False(t, ok)
+}
+
+func Test_동일유저_복수연결_모두수신(t *testing.T) {
+	// 같은 계정으로 두 탭 접속 시 양쪽 모두 귓속말을 받아야 한다
+	h := newTestHub("1")
+	c1 := NewClient(10, "찬", nil, "1")
+	c2 := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[c1] = true
+	h.rooms["1"].clients[c2] = true
+
+	ok := h.SendToUser("1", 10, []byte("hello"))
+
+	assert.True(t, ok)
+	assert.Equal(t, []byte("hello"), <-c1.Send)
+	assert.Equal(t, []byte("hello"), <-c2.Send)
+}
+
 func Test_커밋된에이전트_조회_성공(t *testing.T) {
 	h := newTestHub("1")
 	slot, _ := h.TryReserveAgentSlot("1", testMaxAgents)
