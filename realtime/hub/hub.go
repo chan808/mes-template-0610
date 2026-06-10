@@ -51,14 +51,17 @@ type AgentState struct {
 	Nickname     string
 	X            float64
 	Y            float64
+	Slot         int                // 위치 슬롯 인덱스 (예약 기반, 중복 방지)
+	Ctx          context.Context    // 에이전트 수명주기 컨텍스트 (dismiss 시 취소)
 	CancelFn     context.CancelFunc
 	HumanInputCh chan string // HitL: handleAgentInput → streamAgentResponse 응답 전달
 }
 
 type roomState struct {
-	clients map[*Client]bool
-	ps      *redis.PubSub
-	agents  map[string]*AgentState
+	clients       map[*Client]bool
+	ps            *redis.PubSub
+	agents        map[string]*AgentState
+	reservedSlots map[int]bool // 소환 진행 중 슬롯 (check-then-act race 방지)
 }
 
 type Hub struct {
@@ -82,8 +85,9 @@ func (h *Hub) Join(c *Client) {
 	r, ok := h.rooms[c.RoomID]
 	if !ok {
 		r = &roomState{
-			clients: make(map[*Client]bool),
-			agents:  make(map[string]*AgentState),
+			clients:       make(map[*Client]bool),
+			agents:        make(map[string]*AgentState),
+			reservedSlots: make(map[int]bool),
 		}
 		h.rooms[c.RoomID] = r
 		h.startSubscriber(c.RoomID, r)
@@ -123,11 +127,48 @@ func (h *Hub) Publish(ctx context.Context, roomID string, data []byte) {
 	h.rdb.Publish(ctx, "room:"+roomID, string(data))
 }
 
-// AddAgent는 룸에 에이전트를 등록한다
-func (h *Hub) AddAgent(roomID string, state *AgentState) {
+// TryReserveAgentSlot은 빈 에이전트 슬롯을 원자적으로 예약한다 (동시 소환 race 방지)
+func (h *Hub) TryReserveAgentSlot(roomID string, maxAgents int) (int, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r, ok := h.rooms[roomID]
+	if !ok {
+		return 0, false
+	}
+	if len(r.agents)+len(r.reservedSlots) >= maxAgents {
+		return 0, false
+	}
+	used := make(map[int]bool, maxAgents)
+	for s := range r.reservedSlots {
+		used[s] = true
+	}
+	for _, a := range r.agents {
+		used[a.Slot] = true
+	}
+	for slot := 0; slot < maxAgents; slot++ {
+		if !used[slot] {
+			r.reservedSlots[slot] = true
+			return slot, true
+		}
+	}
+	return 0, false
+}
+
+// ReleaseAgentSlot은 예약한 슬롯을 반환한다 (소환 실패 시)
+func (h *Hub) ReleaseAgentSlot(roomID string, slot int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if r, ok := h.rooms[roomID]; ok {
+		delete(r.reservedSlots, slot)
+	}
+}
+
+// CommitAgent는 예약한 슬롯에 에이전트를 확정 등록한다
+func (h *Hub) CommitAgent(roomID string, state *AgentState) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r, ok := h.rooms[roomID]; ok {
+		delete(r.reservedSlots, state.Slot)
 		r.agents[state.AgentID] = state
 	}
 }

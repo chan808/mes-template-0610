@@ -33,8 +33,8 @@ rooms (id, invite_token[uuid, unique],
        name, owner_id→users, is_private, max_capacity[default 10],
        status[active|closed], deleted_at[nullable], created_at, updated_at)
 
-messages (id, room_id→rooms, user_id→users[nullable=system], content,
-          type[chat|system], created_at)
+messages (id, room_id→rooms, user_id→users[nullable=system/agent], content,
+          type[chat|system|agent], agent_nickname[nullable, type=agent 표시용], created_at)
 
 -- indexes
 CREATE INDEX idx_messages_room_id_id ON messages(room_id, id DESC);
@@ -150,20 +150,27 @@ client → server
   move          {x, y}
   chat          {content}
   ping          {}
-  summon_agent  {role: "helper"|"summarizer"}
-  dismiss_agent {}
+  summon_agent  {role: "helper"|"summarizer"|"researcher"|"critic"|"orchestrator"}
+  dismiss_agent {agentId}
+  agent_input   {agentId, response}          -- HitL 사용자 응답
 
 server → client
-  presence      {userId, x, y, nickname, avatarId}
-  chat          {messageId, userId, content, createdAt}
-  join          {userId, nickname}
-  leave         {userId}
-  pong          {}
-  error         {code, message}
-  agent_joined  {agentId, role, nickname, x, y}
-  agent_left    {agentId}
-  agent_message {agentId, content, done}
+  presence          {userId, x, y, nickname, avatarId}
+  chat              {messageId, userId, content, createdAt}
+  join              {userId, nickname}
+  leave             {userId}
+  pong              {}
+  error             {code, message}
+  agent_joined      {agentId, role, nickname, x, y}   -- 신규 입장자에게도 활성 에이전트 수만큼 재전송
+  agent_left        {agentId}
+  agent_message     {agentId, content, done}
+  agent_needs_input {agentId, toolUseId, prompt, options}
+  agent_thinking    {agentId, step}
+  agent_file        {agentId, filename, url, mimeType}
 ```
+
+채팅 → 에이전트 라우팅: 메시지에 등록된 에이전트 닉네임과 일치하는 `@닉네임`이 있으면
+해당 에이전트에게만, 없으면(무관한 `@` 포함) 모든 에이전트에게 전달한다.
 
 ---
 
@@ -282,20 +289,27 @@ client dismiss_agent → Go → DELETE /internal/agent/sessions/{id}
 agolive-agent (Python/FastAPI) — 구현 완료
 
 **멀티 에이전트**
-- 방 당 최대 4개 에이전트 동시 소환
+- 방 당 최대 4개 에이전트 동시 소환 (Go hub의 슬롯 예약으로 정원·위치를 원자적으로 결정)
 - 역할: helper | summarizer | researcher | critic | orchestrator
-- `@닉네임` 포함 시 해당 에이전트에게만 전달, 없으면 모든 에이전트
-- 신규 입장자에게 현재 에이전트 목록 즉시 전송 (agents_snapshot)
-- 에이전트별 개별 퇴장 (`dismiss_agent {agentId}`)
+- 동일 역할 중복 소환 시 닉네임에 번호 부여 (예: "AI 도우미 2")
+- 등록된 닉네임과 일치하는 `@닉네임` 포함 시 해당 에이전트에게만 전달, 없으면 모든 에이전트
+- 신규 입장자에게 현재 에이전트 목록 즉시 전송 (`agent_joined` 반복 전송)
+- 에이전트별 개별 퇴장 (`dismiss_agent {agentId}`) — 진행 중 스트림/HitL 대기도 컨텍스트로 함께 취소
+- 에이전트 세션 소실(서비스 재시작 등) 감지 시 hub에서 자동 정리 + `agent_left` 브로드캐스트
+- 에이전트 응답 전문은 완료 시 `type=agent` 메시지로 DB 저장 (새로고침 후에도 히스토리 유지)
 
 **Tool Use 루프 (SSE 기반)**
 ```
 Python: while True:
   Claude API stream → text 청크 yield (content, done: false)
   stop_reason == tool_use → {type:"tool_use", toolName, toolInput, toolUseId} yield
-  _tool_event.wait(timeout=60s, keepalive 5s) → Go가 /tool_result 주입 → 루프 재진행
+  _tool_event.wait(timeout=180s, keepalive 5s) → Go가 /tool_result 주입 → 루프 재진행
   stop_reason == end_turn → {done: true} yield
 ```
+
+타임아웃 계층: Python tool_result 대기(180s) > Go HitL 사용자 응답 대기(120s).
+Python 대기가 더 길어야 타임아웃 직전의 사용자 응답이 유실되지 않는다.
+히스토리 절단(40개)은 tool_use/tool_result 쌍이 깨지지 않는 경계에서 수행한다.
 
 **Human-in-the-loop (request_human_input 툴)**
 ```

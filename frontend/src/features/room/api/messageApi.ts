@@ -6,8 +6,10 @@ export interface HistoryMessage {
   userId: number | null;
   nickname: string | null;
   content: string;
-  type: "chat" | "system";
+  type: "chat" | "system" | "agent";
   createdAt: string;
+  // type=agent일 때 표시용 닉네임
+  agentNickname?: string | null;
 }
 
 export interface MessagesResponse {

@@ -37,10 +37,13 @@ export const useChatStore = create<ChatState>((set) => ({
       const streamId = `${STREAMING_ID_PREFIX}${agentId}`;
       const existing = state.messages.find((m) => m.id === streamId);
 
+      // 완료 시 ID를 고유값으로 확정해 같은 에이전트의 다음 턴이 새 말풍선으로 시작되게 한다
+      const finalId = `agent-${agentId}-${Date.now()}`;
+
       if (!existing) {
         // 첫 청크: 스트리밍 메시지 생성
         const newMsg: DisplayMessage = {
-          id: streamId,
+          id: done ? finalId : streamId,
           type: "agent",
           agentId,
           nickname,
@@ -55,7 +58,7 @@ export const useChatStore = create<ChatState>((set) => ({
       return {
         messages: state.messages.map((m) =>
           m.id === streamId && m.type === "agent"
-            ? { ...m, content: m.content + content, streaming: !done }
+            ? { ...m, id: done ? finalId : streamId, content: m.content + content, streaming: !done }
             : m,
         ),
       };

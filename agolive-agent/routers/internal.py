@@ -24,6 +24,9 @@ _sessions: dict[str, "AgentSession"] = {}
 _lock = asyncio.Lock()
 
 MAX_AGENTS_PER_ROOM = 4
+MAX_HISTORY = 40
+# Go의 HitL 대기(120s)보다 길어야 사용자 응답이 유실되지 않는다
+TOOL_RESULT_TIMEOUT_SECONDS = 180.0
 
 # request_human_input 툴: 모든 역할에서 사용 가능 (Phase 3-B)
 REQUEST_HUMAN_INPUT_TOOL = {
@@ -153,18 +156,29 @@ def verify_internal(x_internal_secret: str = Header(...)):
         raise HTTPException(status_code=401)
 
 
+def truncate_history(history: list[dict], max_len: int = MAX_HISTORY) -> list[dict]:
+    """히스토리를 최대 길이로 절단하되 tool_use/tool_result 쌍이 깨지지 않게 유지한다.
+
+    단순 슬라이스는 tool_result(user 메시지의 list content)가 선행 tool_use 없이
+    맨 앞에 남아 Claude API 400을 유발할 수 있다. 절단 후 첫 메시지가
+    일반 텍스트 user 메시지가 될 때까지 앞에서 추가로 제거한다.
+    """
+    if len(history) <= max_len:
+        return history
+    trimmed = history[-max_len:]
+    while trimmed and not (
+        trimmed[0]["role"] == "user" and isinstance(trimmed[0]["content"], str)
+    ):
+        trimmed.pop(0)
+    return trimmed
+
+
 @router.post("/agent/sessions")
 async def summon_agent(body: dict, _=Depends(verify_internal)):
     room_id = str(body["roomId"])
     role = body.get("role", "helper")
     x = float(body.get("x", 900.0))
     y = float(body.get("y", 200.0))
-
-    # 방 당 최대 에이전트 수 확인
-    async with _lock:
-        room_agent_count = sum(1 for s in _sessions.values() if s.room_id == room_id)
-        if room_agent_count >= MAX_AGENTS_PER_ROOM:
-            raise HTTPException(status_code=409, detail="AGENT_LIMIT_EXCEEDED")
 
     config = ROLE_CONFIGS.get(role, ROLE_CONFIGS["helper"])
     agent_id = str(uuid.uuid4())
@@ -192,14 +206,22 @@ async def summon_agent(body: dict, _=Depends(verify_internal)):
         tools=config.get("tools", []),
     )
 
+    # 정원 확인과 등록을 한 락 안에서 처리 (동시 소환 race 방지)
     async with _lock:
+        room_sessions = [s for s in _sessions.values() if s.room_id == room_id]
+        if len(room_sessions) >= MAX_AGENTS_PER_ROOM:
+            raise HTTPException(status_code=409, detail="AGENT_LIMIT_EXCEEDED")
+        # 동일 역할 중복 소환 시 닉네임에 번호를 붙여 구분 (@멘션 라우팅 충돌 방지)
+        same_role_count = sum(1 for s in room_sessions if s.role == role)
+        if same_role_count:
+            session.nickname = f"{config['nickname']} {same_role_count + 1}"
         _sessions[agent_id] = session
 
     return {
         "agentId": agent_id,
         "x": x,
         "y": y,
-        "nickname": config["nickname"],
+        "nickname": session.nickname,
         "role": role,
     }
 
@@ -212,9 +234,8 @@ async def send_message(agent_id: str, body: dict, _=Depends(verify_internal)):
 
     user_content = f"유저 {body['userId']}: {body['content']}"
     session.history.append({"role": "user", "content": user_content})
-    # 오래된 히스토리 제거 (항상 짝수 쌍 유지)
-    if len(session.history) > 40:
-        session.history = session.history[-40:]
+    # 오래된 히스토리 제거 (tool_use/tool_result 쌍 보존)
+    session.history = truncate_history(session.history)
 
     return StreamingResponse(
         _stream_response(session),
@@ -307,8 +328,8 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
                     f"data: {json.dumps({'type': 'tool_use', 'toolName': block.name, 'toolInput': block.input, 'toolUseId': block.id, 'done': False}, ensure_ascii=False)}\n\n"
                 )
 
-            # Go가 tool_result를 주입할 때까지 대기 (최대 60초, keepalive 포함)
-            deadline = asyncio.get_event_loop().time() + 60.0
+            # Go가 tool_result를 주입할 때까지 대기 (keepalive 포함)
+            deadline = asyncio.get_event_loop().time() + TOOL_RESULT_TIMEOUT_SECONDS
             while not session._tool_event.is_set():
                 if session.cancelled:
                     return
