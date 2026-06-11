@@ -209,9 +209,35 @@ content 최대 500자(rune). 대상 부재 시 `error {code: WHISPER_TARGET_NOT_
   차단 가구는 아바타와 같은 레이어에서 y 기준 zIndex 정렬(아바타가 가구 뒤로 가면 가려짐)
 - 맵 크기: `lib/maps.ts`의 `resolveMapSpec()`이 단일 분기점 — 구독 등급별 맵 크기는 여기서 확장.
   단, 서버가 같은 범위로 검증하므로 방 데이터에 맵 크기를 싣고 `realtime/game/movement.go`도 함께 변경해야 함
-- 가구 데이터: 현재 `lib/maps.ts`의 정적 샘플. 맵 에디터/API 도입 시 서버 데이터로 대체
+- 가구 데이터: 기본 레이아웃은 `lib/maps.ts`의 `SEED_FURNITURE` (placedBy null). 서버 맵 데이터 도입 시 입장 응답으로 대체
 - 에이전트 행동 확장 지점: 아바타는 스토어 상태를 큐로 재생만 하므로, 추후 AI의 대화형 지시(이동·이펙트 등)는
   서버 이벤트 → presence/agent 스토어 갱신만으로 렌더러 수정 없이 동작한다
+
+### 가구 편집 (클라이언트 구현, 서버 연동 예정)
+
+"가구 편집" 토글로 편집 모드 진입(패널 열림 동안만 격자 표시·드래그 가능). 포인터 기반 집기 → 고스트 → 놓기 — HTML5 DnD API 미사용.
+관련 코드: `stores/furnitureStore.ts`(상태·권한), `stores/editorStore.ts`(드래그 세션), `components/FurniturePanel.tsx`, `components/FurnitureDropZone.tsx`
+
+- 배치: 패널에서 가구를 끌어 맵에 놓기. 고스트 footprint에 초록(가능)/빨강(불가) 표시
+- 이동: 배치된 가구를 끌어 옮기기. 회전: 드래그 중 `R` (90도 단위, 홀수 회전 시 footprint w↔h)
+- 취소/삭제: 상단 중앙 드롭존 — 신규는 ✕취소, 기존 가구는 삭제. 패널 위 드롭·ESC·우클릭은 취소
+- 배치 규칙(`canPlace`): 맵 범위 내 + 차단 가구끼리 겹침 금지 + 차단 가구의 스폰 타일 점유 금지. 통과 가구(러그)는 겹침 자유
+- 권한(`canEditFurniture`): 방장은 전체, 멤버는 본인이 배치한 가구만, 기본 가구(placedBy null)는 방장만
+- 충돌 연동: 충돌맵은 가구 스토어에서 파생(`useRoomMap`) — 배치/이동/삭제가 이동 가능 영역에 즉시 반영
+- 현재 한계: 클라이언트 로컬 상태 — 새로고침 시 SEED로 초기화되고 다른 접속자에게 공유되지 않음. 방 전환/퇴장 시 스토어 리셋
+
+**서버 연동 계획 (미구현, 다음 작업)**
+
+스토어 액션과 1:1 대응으로 설계되어 있어 액션 내부에 send 추가 + 수신 핸들러만 붙이면 된다.
+
+1. WS 이벤트 (클라→서버): `place_furniture {kind, x, y, rotation}` / `move_furniture {id, x, y, rotation}` / `remove_furniture {id}`
+2. 서버 검증 (Go, 클라이언트 `canPlace`/`canEditFurniture`와 동일 규칙): 방 멤버십 → 권한(방장 전체/멤버 본인 것) → 범위 →
+   차단 가구 겹침 → 스폰 타일 → rate limit. kind는 서버 카탈로그에서 조회(크기·passable을 클라 입력으로 받지 않음)
+3. 브로드캐스트 (서버→클라): `furniture_placed {furniture}` / `furniture_moved {id, x, y, rotation}` / `furniture_removed {id}`
+   — 수신 시 furnitureStore 갱신(본인 낙관 반영분은 id로 멱등 처리)
+4. 영속화: `room_furniture` 테이블 (id, room_id, kind, x, y, rotation, placed_by, created_at) — passable/크기/색은 카탈로그에서 파생.
+   입장 시(REST 또는 WS 초기 이벤트) 가구 목록을 내려 `SEED_FURNITURE`를 대체
+5. 구독 등급 연계: 방(=방장)의 플랜에 따라 가구 개수 상한·맵 크기(`resolveMapSpec`) 서버 검증 추가
 
 ---
 

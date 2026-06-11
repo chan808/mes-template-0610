@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { Application, Container, Graphics, Ticker } from "pixi.js";
 import { usePresenceStore } from "../stores/presenceStore";
 import { useComposerStore } from "../stores/composerStore";
+import { PlacedFurniture, canEditFurniture, useFurnitureStore } from "../stores/furnitureStore";
+import { useEditorStore } from "../stores/editorStore";
 import { useTileMovement } from "../hooks/useTileMovement";
-import { Direction, TILE_SIZE, TilePos, tileToPixel } from "../lib/tile";
+import { useRoomMap } from "../hooks/useRoomMap";
+import { Direction, MapSpec, SPAWN_TILE, TILE_SIZE, TilePos, tileToPixel } from "../lib/tile";
 import { TileWalker } from "../lib/tileWalker";
 import { cameraOffset } from "../lib/camera";
-import { getRoomMap } from "../lib/maps";
-import { Furniture } from "../lib/furniture";
+import { canPlace, effectiveSize } from "../lib/furniture";
+import { anchorTopLeft } from "../lib/furnitureCatalog";
 import { ClientMessage } from "../types/ws";
+import FurniturePanel from "./FurniturePanel";
+import FurnitureDropZone from "./FurnitureDropZone";
 
 const BODY_RADIUS = 16;
 const DOUBLE_TAP_MS = 350;
@@ -58,13 +63,17 @@ interface AvatarTarget {
 interface SpaceCanvasProps {
   myUserId: number;
   myNickname: string;
+  roomOwnerId: number;
   onSend: (msg: ClientMessage) => void;
 }
 
-export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanvasProps) {
-  // 가구 충돌이 반영된 방 맵 (맵 에디터/API 도입 전까지 정적 데이터)
-  const roomMap = useMemo(() => getRoomMap(), []);
-  useTileMovement(onSend, roomMap.map);
+export default function SpaceCanvas({ myUserId, myNickname, roomOwnerId, onSend }: SpaceCanvasProps) {
+  // 가구 스토어에서 파생된 충돌맵 — 가구 변경이 이동에 즉시 반영
+  const { spec, map } = useRoomMap();
+  useTileMovement(onSend, map);
+
+  const panelOpen = useEditorStore((s) => s.panelOpen);
+  const togglePanel = useEditorStore((s) => s.togglePanel);
 
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -74,7 +83,7 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
 
     let disposed = false;
     let app: Application | undefined;
-    let unsubscribe: (() => void) | undefined;
+    const cleanups: (() => void)[] = [];
 
     (async () => {
       // SSR 번들에서 제외하고 클라이언트에서만 로드
@@ -96,33 +105,30 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
       app = instance;
       host.appendChild(instance.canvas);
 
-      const { map, furniture } = roomMap;
-      const worldW = map.cols * TILE_SIZE;
-      const worldH = map.rows * TILE_SIZE;
+      const worldW = spec.cols * TILE_SIZE;
+      const worldH = spec.rows * TILE_SIZE;
 
-      // 레이어 구성: 바닥 → 통과 가구 → (차단 가구 + 아바타, y 정렬)
+      // 레이어: 바닥 → 통과 가구 → (차단 가구 + 아바타, y 정렬) → 편집 격자 → 고스트
       const world = new PIXI.Container();
+      const passableLayer = new PIXI.Container();
       const entityLayer = new PIXI.Container();
       entityLayer.sortableChildren = true;
+      const gridOverlay = buildEditGrid(PIXI, spec);
+      gridOverlay.visible = false;
+      const ghost = new PIXI.Graphics();
 
-      world.addChild(buildFloor(PIXI, map.cols, map.rows));
-      for (const f of furniture) {
-        const node = buildFurniture(PIXI, f);
-        if (f.passable) {
-          world.addChild(node);
-        } else {
-          // 발밑(y)이 더 아래인 쪽이 앞에 보이도록 타일 단위 zIndex
-          node.zIndex = f.y + f.h;
-          entityLayer.addChild(node);
-        }
-      }
+      world.addChild(buildFloor(PIXI, spec.cols, spec.rows));
+      world.addChild(passableLayer);
       world.addChild(entityLayer);
+      world.addChild(gridOverlay);
+      world.addChild(ghost);
       instance.stage.addChild(world);
 
+      // ───────────────────────── 아바타 ─────────────────────────
       const nodes = new Map<string, AvatarNode>();
       const meKey = `user-${myUserId}`;
 
-      // 더블탭(클릭)으로 채팅 타겟 설정: 유저 → 귓속말, 에이전트 → @멘션 (ADR-0002)
+      // 더블탭으로 채팅 타겟 설정: 유저 → 귓속말, 에이전트 → @멘션 (ADR-0002)
       const onAvatarTap = (node: AvatarNode) => {
         const now = performance.now();
         const isDouble = now - node.lastTap < DOUBLE_TAP_MS;
@@ -135,7 +141,7 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         }
       };
 
-      const createNode = (t: AvatarTarget): AvatarNode => {
+      const createAvatarNode = (t: AvatarTarget): AvatarNode => {
         const root = new PIXI.Container();
         const color = t.isAgent ? 0x7c3aed : getAvatarColor(t.colorSeed);
 
@@ -186,8 +192,8 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         return node;
       };
 
-      // 스토어 상태를 렌더 노드에 반영: 생성·이동 큐 적재·제거
-      const sync = (state: ReturnType<typeof usePresenceStore.getState>) => {
+      // presence 스토어 → 아바타 노드 동기화
+      const syncAvatars = (state: ReturnType<typeof usePresenceStore.getState>) => {
         const targets = new Map<string, AvatarTarget>();
         targets.set(meKey, {
           key: meKey, tile: state.myTile, dir: state.myDir, nickname: myNickname,
@@ -210,7 +216,7 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         for (const [key, t] of targets) {
           const node = nodes.get(key);
           if (!node) {
-            nodes.set(key, createNode(t));
+            nodes.set(key, createAvatarNode(t));
           } else {
             // 인접 칸은 큐 재생, 비인접(스냅 보정·순간이동)은 TileWalker가 즉시 스냅
             node.walker.push(t.tile, t.dir ?? undefined);
@@ -224,7 +230,197 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         }
       };
 
-      // 매 프레임: 이동 큐 재생 → 픽셀 좌표 반영 → 카메라 추적
+      // ───────────────────────── 가구 ─────────────────────────
+      const furnitureNodes = new Map<string, { root: Container; item: PlacedFurniture }>();
+
+      // 편집 상태 반영: 편집 모드에서 권한 있는 가구만 잡을 수 있고, 드래그 중인 원본은 흐리게
+      const applyEditState = () => {
+        const { panelOpen: editing, drag } = useEditorStore.getState();
+        for (const [id, node] of furnitureNodes) {
+          const editable = editing && canEditFurniture(node.item, myUserId, roomOwnerId);
+          node.root.eventMode = editable ? "static" : "none";
+          node.root.cursor = "grab";
+          node.root.alpha = drag?.mode === "placed" && drag.id === id ? 0.35 : 1;
+        }
+      };
+
+      const createFurnitureNode = (item: PlacedFurniture) => {
+        const root = buildFurnitureNode(PIXI, item);
+        // 발밑(y)이 더 아래인 쪽이 앞에 보이도록 타일 단위 zIndex
+        if (item.passable) {
+          passableLayer.addChild(root);
+        } else {
+          root.zIndex = item.y + effectiveSize(item.w, item.h, item.rotation).h;
+          entityLayer.addChild(root);
+        }
+        // 편집 모드에서 잡기(픽업) — 권한은 applyEditState가 eventMode로 제어
+        root.on("pointerdown", () => {
+          const editor = useEditorStore.getState();
+          if (!editor.panelOpen || editor.drag) return;
+          const current = useFurnitureStore.getState().items.get(item.id);
+          if (!current || !canEditFurniture(current, myUserId, roomOwnerId)) return;
+          editor.startPlacedDrag(item.id, {
+            kind: current.kind,
+            label: current.label ?? "",
+            w: current.w,
+            h: current.h,
+            passable: current.passable,
+            color: current.color,
+          }, current.rotation);
+        });
+        furnitureNodes.set(item.id, { root, item });
+      };
+
+      // 가구 스토어 → 가구 노드 동기화 (수가 적어 변경 시 노드 재생성)
+      const syncFurniture = (items: Map<string, PlacedFurniture>) => {
+        for (const [id, item] of items) {
+          const node = furnitureNodes.get(id);
+          if (!node) {
+            createFurnitureNode(item);
+          } else if (node.item.x !== item.x || node.item.y !== item.y || node.item.rotation !== item.rotation) {
+            node.root.destroy({ children: true });
+            furnitureNodes.delete(id);
+            createFurnitureNode(item);
+          }
+        }
+        for (const [id, node] of furnitureNodes) {
+          if (!items.has(id)) {
+            node.root.destroy({ children: true });
+            furnitureNodes.delete(id);
+          }
+        }
+        applyEditState();
+      };
+
+      // ─────────────────── 가구 드래그(배치·이동) ───────────────────
+      let lastClient = { x: 0, y: 0 };
+
+      // 포인터 위치 → 고스트 타일과 배치 가능 여부 계산
+      const computeDragTile = () => {
+        const editor = useEditorStore.getState();
+        const drag = editor.drag;
+        if (!drag) return;
+
+        const overEl = document.elementFromPoint(lastClient.x, lastClient.y);
+        const overZone = !!overEl?.closest("[data-furniture-dropout]");
+        const overCancel = !!overEl?.closest("[data-furniture-cancel]");
+        editor.setOverZone(overZone);
+
+        const rect = instance.canvas.getBoundingClientRect();
+        const inCanvas =
+          lastClient.x >= rect.left && lastClient.x < rect.right &&
+          lastClient.y >= rect.top && lastClient.y < rect.bottom;
+
+        if (!inCanvas || overZone || overCancel) {
+          editor.setDragTile(null, false);
+          return;
+        }
+
+        const wx = lastClient.x - rect.left - world.position.x;
+        const wy = lastClient.y - rect.top - world.position.y;
+        const pointerTile = { x: Math.floor(wx / TILE_SIZE), y: Math.floor(wy / TILE_SIZE) };
+        const topLeft = anchorTopLeft(pointerTile, drag.entry.w, drag.entry.h, drag.rotation);
+        const items = [...useFurnitureStore.getState().items.values()];
+        const valid = canPlace(items, spec, {
+          ...topLeft,
+          w: drag.entry.w,
+          h: drag.entry.h,
+          rotation: drag.rotation,
+          passable: drag.entry.passable,
+          excludeId: drag.id ?? undefined,
+        });
+        editor.setDragTile(topLeft, valid);
+      };
+
+      const onPointerMove = (e: PointerEvent) => {
+        lastClient = { x: e.clientX, y: e.clientY };
+        if (useEditorStore.getState().drag) computeDragTile();
+      };
+
+      // 드롭 확정: 드롭존 → 취소/삭제, 유효 타일 → 배치/이동, 그 외 → 취소
+      const onPointerUp = () => {
+        const editor = useEditorStore.getState();
+        const drag = editor.drag;
+        if (!drag) return;
+        const store = useFurnitureStore.getState();
+
+        if (drag.overZone) {
+          if (drag.mode === "placed" && drag.id) store.remove(drag.id, myUserId, roomOwnerId);
+        } else if (drag.tile && drag.valid) {
+          if (drag.mode === "palette") {
+            store.place({
+              id: crypto.randomUUID(),
+              kind: drag.entry.kind,
+              x: drag.tile.x,
+              y: drag.tile.y,
+              w: drag.entry.w,
+              h: drag.entry.h,
+              rotation: drag.rotation,
+              passable: drag.entry.passable,
+              color: drag.entry.color,
+              label: drag.entry.label,
+              placedBy: myUserId,
+            }, spec);
+          } else if (drag.id) {
+            store.move(drag.id, { x: drag.tile.x, y: drag.tile.y, rotation: drag.rotation }, myUserId, roomOwnerId, spec);
+          }
+        }
+        editor.endDrag();
+      };
+
+      const onKeyDown = (e: KeyboardEvent) => {
+        const editor = useEditorStore.getState();
+        if (!editor.drag) return;
+        if (e.code === "KeyR") {
+          e.preventDefault();
+          editor.rotateDrag();
+          computeDragTile();
+        } else if (e.code === "Escape") {
+          editor.endDrag();
+        }
+      };
+
+      // 드래그 중 우클릭은 취소
+      const onContextMenu = (e: MouseEvent) => {
+        if (useEditorStore.getState().drag) {
+          e.preventDefault();
+          useEditorStore.getState().endDrag();
+        }
+      };
+
+      // 포인터 강제 중단(브라우저 제스처 등) 시 드래그 취소
+      const onPointerCancel = () => {
+        if (useEditorStore.getState().drag) useEditorStore.getState().endDrag();
+      };
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerCancel);
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("contextmenu", onContextMenu);
+      cleanups.push(() => {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerCancel);
+        window.removeEventListener("keydown", onKeyDown);
+        window.removeEventListener("contextmenu", onContextMenu);
+      });
+
+      // 고스트(footprint 미리보기): 초록=배치 가능, 빨강=불가
+      const redrawGhost = () => {
+        const drag = useEditorStore.getState().drag;
+        ghost.clear();
+        if (!drag?.tile) return;
+        const size = effectiveSize(drag.entry.w, drag.entry.h, drag.rotation);
+        const x = drag.tile.x * TILE_SIZE;
+        const y = drag.tile.y * TILE_SIZE;
+        const w = size.w * TILE_SIZE;
+        const h = size.h * TILE_SIZE;
+        ghost.roundRect(x + 2, y + 2, w - 4, h - 4, 6).fill({ color: drag.entry.color, alpha: 0.45 });
+        ghost.roundRect(x + 2, y + 2, w - 4, h - 4, 6).stroke({ width: 3, color: drag.valid ? 0x22c55e : 0xef4444 });
+      };
+
+      // ─────────────────── 스토어 구독 + 프레임 루프 ───────────────────
       const tick = (ticker: Ticker) => {
         const dt = ticker.deltaMS;
         for (const node of nodes.values()) {
@@ -244,27 +440,58 @@ export default function SpaceCanvas({ myUserId, myNickname, onSend }: SpaceCanva
         }
       };
 
-      sync(usePresenceStore.getState());
-      unsubscribe = usePresenceStore.subscribe(sync);
+      syncAvatars(usePresenceStore.getState());
+      syncFurniture(useFurnitureStore.getState().items);
+      cleanups.push(usePresenceStore.subscribe(syncAvatars));
+      cleanups.push(useFurnitureStore.subscribe((s) => syncFurniture(s.items)));
+      cleanups.push(
+        useEditorStore.subscribe((s) => {
+          gridOverlay.visible = s.panelOpen;
+          document.body.style.cursor = s.drag ? "grabbing" : "";
+          redrawGhost();
+          applyEditState();
+        }),
+      );
+      gridOverlay.visible = useEditorStore.getState().panelOpen;
       instance.ticker.add(tick);
     })();
 
     return () => {
       disposed = true;
-      unsubscribe?.();
+      for (const fn of cleanups) fn();
+      document.body.style.cursor = "";
       if (app) {
         app.destroy(true, { children: true });
         app = undefined;
       }
     };
-  }, [roomMap, myUserId, myNickname]);
+  }, [spec, myUserId, myNickname, roomOwnerId]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-slate-900">
       <div ref={hostRef} className="absolute inset-0" />
-      {/* 조작 안내 오버레이 (React/DOM 레이어) */}
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-lg bg-black/50 px-2 py-1 text-xs text-white/60">
-        WASD / 방향키 이동 · 아바타 더블클릭: 귓속말/에이전트 지정
+
+      {/* 가구 편집 토글 */}
+      <button
+        type="button"
+        onClick={togglePanel}
+        className={`absolute right-3 top-3 z-10 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+          panelOpen
+            ? "border-indigo-400 bg-indigo-500 text-white"
+            : "border-white/15 bg-black/50 text-white/80 hover:bg-black/70"
+        }`}
+      >
+        {panelOpen ? "편집 완료" : "가구 편집"}
+      </button>
+
+      {panelOpen && <FurniturePanel />}
+      <FurnitureDropZone />
+
+      {/* 조작 안내 */}
+      <div className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/50 px-2 py-1 text-xs text-white/60">
+        {panelOpen
+          ? "드래그 배치 · R 회전 · ESC/우클릭 취소"
+          : "WASD / 방향키 이동 · 아바타 더블클릭: 귓속말/에이전트 지정"}
       </div>
     </div>
   );
@@ -288,16 +515,47 @@ function buildFloor(PIXI: typeof import("pixi.js"), cols: number, rows: number):
   return g;
 }
 
-// 가구: 색 사각형 + 라벨 (스프라이트 도입 전 임시 표현)
-function buildFurniture(PIXI: typeof import("pixi.js"), f: Furniture): Container {
+// 편집 모드 격자: 진한 격자 + 스폰 타일 표시
+function buildEditGrid(PIXI: typeof import("pixi.js"), spec: MapSpec): Graphics {
+  const g = new PIXI.Graphics();
+  const w = spec.cols * TILE_SIZE;
+  const h = spec.rows * TILE_SIZE;
+
+  for (let x = 0; x <= spec.cols; x++) {
+    g.moveTo(x * TILE_SIZE, 0).lineTo(x * TILE_SIZE, h);
+  }
+  for (let y = 0; y <= spec.rows; y++) {
+    g.moveTo(0, y * TILE_SIZE).lineTo(w, y * TILE_SIZE);
+  }
+  g.stroke({ width: 1, color: 0x818cf8, alpha: 0.18 });
+
+  // 스폰 타일: 차단 가구 배치 불가 표시
+  const { px, py } = tileToPixel(SPAWN_TILE);
+  g.circle(px, py, TILE_SIZE * 0.32).stroke({ width: 2, color: 0x818cf8, alpha: 0.6 });
+  return g;
+}
+
+// 가구 노드: 색 사각형(회전 반영) + 정면 표시 띠 + 라벨 (스프라이트 도입 전 임시 표현)
+function buildFurnitureNode(PIXI: typeof import("pixi.js"), f: PlacedFurniture): Container {
   const c = new PIXI.Container();
-  const w = f.w * TILE_SIZE;
-  const h = f.h * TILE_SIZE;
+  const size = effectiveSize(f.w, f.h, f.rotation);
+  const w = size.w * TILE_SIZE;
+  const h = size.h * TILE_SIZE;
 
   const g = new PIXI.Graphics();
   g.roundRect(2, 2, w - 4, h - 4, 6).fill({ color: f.color, alpha: f.passable ? 0.45 : 1 });
   if (!f.passable) {
     g.roundRect(2, 2, w - 4, h - 4, 6).stroke({ width: 2, color: 0x000000, alpha: 0.25 });
+    // 정면(회전 기준) 가장자리 띠 — 0=아래, 1=왼쪽, 2=위, 3=오른쪽
+    const t = 6;
+    const strip: Record<number, [number, number, number, number]> = {
+      0: [4, h - 4 - t, w - 8, t],
+      1: [4, 4, t, h - 8],
+      2: [4, 4, w - 8, t],
+      3: [w - 4 - t, 4, t, h - 8],
+    };
+    const [sx, sy, sw, sh] = strip[f.rotation];
+    g.roundRect(sx, sy, sw, sh, 3).fill({ color: 0x000000, alpha: 0.2 });
   }
   c.addChild(g);
 

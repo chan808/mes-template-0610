@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getRoomMap, resolveMapSpec } from "../maps";
+import { SEED_FURNITURE, resolveMapSpec } from "../maps";
+import { createMap } from "../furniture";
 import { isWalkable, MAP_COLS, MAP_ROWS, SPAWN_TILE } from "../tile";
 
 // 에이전트 고정 슬롯 — docs/architecture.md와 일치
@@ -19,9 +20,10 @@ describe("resolveMapSpec", () => {
   });
 });
 
-describe("getRoomMap", () => {
+describe("SEED_FURNITURE", () => {
   it("스폰_타일과_에이전트_슬롯은_가구에_막히지_않는다", () => {
-    const { map } = getRoomMap();
+    const spec = resolveMapSpec();
+    const map = createMap(spec.cols, spec.rows, SEED_FURNITURE);
 
     expect(isWalkable(map, SPAWN_TILE.x, SPAWN_TILE.y)).toBe(true);
     for (const slot of AGENT_SLOTS) {
@@ -30,14 +32,17 @@ describe("getRoomMap", () => {
   });
 
   it("차단_가구와_통과_가구가_모두_존재한다", () => {
-    const { furniture } = getRoomMap();
+    expect(SEED_FURNITURE.some((f) => !f.passable)).toBe(true);
+    expect(SEED_FURNITURE.some((f) => f.passable)).toBe(true);
+  });
 
-    expect(furniture.some((f) => !f.passable)).toBe(true);
-    expect(furniture.some((f) => f.passable)).toBe(true);
+  it("기본_가구는_placedBy가_없어_방장만_편집_가능하다", () => {
+    expect(SEED_FURNITURE.every((f) => f.placedBy === null)).toBe(true);
   });
 
   it("스폰_타일에서_최소_한_방향은_이동_가능하다", () => {
-    const { map } = getRoomMap();
+    const spec = resolveMapSpec();
+    const map = createMap(spec.cols, spec.rows, SEED_FURNITURE);
     const neighbors = [
       [SPAWN_TILE.x + 1, SPAWN_TILE.y],
       [SPAWN_TILE.x - 1, SPAWN_TILE.y],

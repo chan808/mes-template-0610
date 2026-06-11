@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
+import { useFurnitureStore } from "../stores/furnitureStore";
+import { useEditorStore } from "../stores/editorStore";
 import { userApi } from "@/features/member/api/userApi";
 import { roomApi } from "../api/roomApi";
 import SpaceCanvas from "./SpaceCanvas";
@@ -15,8 +18,16 @@ interface RoomSpaceViewProps {
   roomId: number;
 }
 
-function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUserId: number; myNickname: string }) {
+function RoomSpaceInner({ roomId, myUserId, myNickname, roomOwnerId }: { roomId: number; myUserId: number; myNickname: string; roomOwnerId: number }) {
   const { send } = useWebSocket(roomId, myUserId);
+
+  // 방 전환/퇴장 시 가구·편집 상태 초기화 — 이전 방의 가구가 다음 방으로 새지 않도록
+  useEffect(() => {
+    return () => {
+      useFurnitureStore.getState().reset();
+      useEditorStore.getState().closePanel();
+    };
+  }, [roomId]);
 
   return (
     <>
@@ -30,7 +41,7 @@ function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUs
         <div className="flex flex-1 overflow-hidden">
           {/* 캔버스 영역: 뷰포트를 채우고 카메라가 내 아바타를 추적 */}
           <div className="flex-1 overflow-hidden p-4">
-            <SpaceCanvas myUserId={myUserId} myNickname={myNickname} onSend={send} />
+            <SpaceCanvas myUserId={myUserId} myNickname={myNickname} roomOwnerId={roomOwnerId} onSend={send} />
           </div>
 
           {/* 사이드바: 접속자 목록 + 채팅 */}
@@ -107,6 +118,7 @@ export default function RoomSpaceView({ roomId }: RoomSpaceViewProps) {
       roomId={roomId}
       myUserId={me.id}
       myNickname={me.nickname ?? me.email}
+      roomOwnerId={room.ownerId}
     />
   );
 }

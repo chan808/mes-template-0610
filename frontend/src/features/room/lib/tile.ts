@@ -25,6 +25,12 @@ export const DIR_DELTA: Record<Direction, TilePos> = {
   right: { x: 1, y: 0 },
 };
 
+// 맵 크기 명세 — 구독 등급별 맵 크기 확장의 단위
+export interface MapSpec {
+  cols: number;
+  rows: number;
+}
+
 // 충돌 맵: collision[y][x] === 1 이면 이동 불가
 export interface TileMap {
   cols: number;
