@@ -137,6 +137,41 @@ func Test_방정리후_커밋_실패반환(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func Test_연결있는유저_HasUserConnection_참(t *testing.T) {
+	h := newTestHub("1")
+	c := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[c] = true
+
+	assert.True(t, h.HasUserConnection("1", 10))
+}
+
+func Test_연결없는유저_HasUserConnection_거짓(t *testing.T) {
+	h := newTestHub("1")
+	c := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[c] = true
+
+	assert.False(t, h.HasUserConnection("1", 99))
+}
+
+func Test_존재하지않는룸_HasUserConnection_거짓(t *testing.T) {
+	h := New(nil)
+
+	assert.False(t, h.HasUserConnection("없는방", 10))
+}
+
+func Test_같은유저_다른연결제거후에도_HasUserConnection_참(t *testing.T) {
+	// 다중 탭: 한 탭이 닫혀도 남은 연결이 있으면 멤버십을 유지해야 한다
+	h := newTestHub("1")
+	tab1 := NewClient(10, "찬", nil, "1")
+	tab2 := NewClient(10, "찬", nil, "1")
+	h.rooms["1"].clients[tab1] = true
+	h.rooms["1"].clients[tab2] = true
+
+	delete(h.rooms["1"].clients, tab1)
+
+	assert.True(t, h.HasUserConnection("1", 10))
+}
+
 func Test_접속중인유저_타겟전송_성공(t *testing.T) {
 	h := newTestHub("1")
 	c := NewClient(10, "찬", nil, "1")

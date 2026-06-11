@@ -212,6 +212,8 @@ JWT claims: `sub(userId), role, tokenVersion, iat, exp`
 ## Business Rules
 
 - 정원 초과 시 신규 입장 거부 (기존 접속자 유지)
+  - 정원 검사·멤버 등록은 Redis Lua 스크립트로 원자 처리 (동시 입장 race 방지)
+  - 같은 유저의 다중 탭은 1명으로 계산하며, 마지막 연결 종료 시에만 멤버십·presence 제거
 - 최대 인원 수정 시 현재 접속자 수 미만으로 설정 불가
 - 초대 토큰 재생성 시 기존 토큰 즉시 무효화 (경고 필요)
 - 방 삭제: 소프트 삭제 → 30일 후 배치 물리 삭제 (`@Scheduled`)
@@ -335,6 +337,10 @@ Python: while True:
 타임아웃 계층: Python tool_result 대기(180s) > Go HitL 사용자 응답 대기(120s).
 Python 대기가 더 길어야 타임아웃 직전의 사용자 응답이 유실되지 않는다.
 히스토리 절단(40개)은 tool_use/tool_result 쌍이 깨지지 않는 경계에서 수행한다.
+
+동시성 규칙:
+- `disable_parallel_tool_use`로 턴당 tool_use 1개만 허용 (Go가 결과를 블록별로 주입하므로)
+- 같은 세션의 메시지 스트림은 세션 락으로 직렬화 (연속 채팅 시 history 동시 변형 방지)
 
 **Human-in-the-loop (request_human_input 툴)**
 ```

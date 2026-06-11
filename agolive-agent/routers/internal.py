@@ -149,6 +149,8 @@ class AgentSession:
     # tool_use 완료 대기 (Phase 3-B/C)
     _tool_event: asyncio.Event = field(default_factory=asyncio.Event)
     _tool_results: list[dict] = field(default_factory=list)
+    # 세션당 스트림 직렬화 — 연속 채팅 시 history/_tool_event 동시 변형 방지
+    _stream_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def verify_internal(x_internal_secret: str = Header(...)):
@@ -237,12 +239,9 @@ async def send_message(agent_id: str, body: dict, _=Depends(verify_internal)):
         raise HTTPException(status_code=404)
 
     user_content = f"유저 {body['userId']}: {body['content']}"
-    session.history.append({"role": "user", "content": user_content})
-    # 오래된 히스토리 제거 (tool_use/tool_result 쌍 보존)
-    session.history = truncate_history(session.history)
 
     return StreamingResponse(
-        _stream_response(session),
+        _stream_response(session, user_content),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -272,8 +271,43 @@ async def dismiss_agent(agent_id: str, _=Depends(verify_internal)):
     return {"ok": True}
 
 
-async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
-    """tool_use 루프를 지원하는 SSE 스트리밍 응답 생성기."""
+def _build_stream_kwargs(session: AgentSession) -> dict:
+    """Claude API 스트리밍 호출 인자를 구성한다."""
+    kwargs: dict = {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "system": session.system_prompt,
+        "messages": session.history,
+    }
+    if session.tools:
+        kwargs["tools"] = session.tools
+        # Go가 tool_result를 블록 단위로 따로 주입하므로 턴당 tool_use 1개만 허용
+        # (병렬 블록 허용 시 결과 1개만 반영되어 다음 호출이 400으로 실패)
+        kwargs["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
+    return kwargs
+
+
+async def _stream_response(session: AgentSession, user_content: str) -> AsyncIterator[str]:
+    """세션 단위 락으로 직렬화된 SSE 스트리밍 응답 생성기.
+
+    같은 세션의 동시 스트림은 history와 _tool_event를 공유 변형하므로
+    락으로 직렬화한다. 연속 채팅은 순차적으로 응답된다.
+    """
+    async with session._stream_lock:
+        if session.cancelled:
+            return
+
+        # 직렬화 확정 후 기록해야 user → assistant 턴 순서가 보존된다
+        session.history.append({"role": "user", "content": user_content})
+        # 오래된 히스토리 제거 (tool_use/tool_result 쌍 보존)
+        session.history = truncate_history(session.history)
+
+        async for chunk in _run_agent_loop(session):
+            yield chunk
+
+
+async def _run_agent_loop(session: AgentSession) -> AsyncIterator[str]:
+    """tool_use 루프를 지원하는 응답 생성 코어 (스트림 락 보유 상태에서 호출)."""
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     while True:
@@ -287,14 +321,7 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
         tool_use_blocks: list = []
 
         try:
-            stream_kwargs: dict = {
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 1024,
-                "system": session.system_prompt,
-                "messages": session.history,
-            }
-            if session.tools:
-                stream_kwargs["tools"] = session.tools
+            stream_kwargs = _build_stream_kwargs(session)
 
             async with client.messages.stream(**stream_kwargs) as stream:
                 async for event in stream:
@@ -352,6 +379,14 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
 
             if session.cancelled:
                 return
+
+            # 방어: 응답이 누락된 tool_use 블록을 채워 히스토리 무결성 보장 (API 400 방지)
+            received = {r.get("tool_use_id") for r in session._tool_results}
+            for block in tool_use_blocks:
+                if block.id not in received:
+                    session._tool_results.append(
+                        {"type": "tool_result", "tool_use_id": block.id, "content": "(결과 누락)"}
+                    )
 
             # tool_result를 히스토리에 추가하고 루프 재진행
             session.history.append({"role": "user", "content": session._tool_results})

@@ -162,6 +162,23 @@ func (h *Hub) SendToUser(roomID string, userID int64, data []byte) bool {
 	return found
 }
 
+// HasUserConnection은 룸에 해당 유저의 활성 연결이 있는지 반환한다 (다중 탭 판별용)
+func (h *Hub) HasUserConnection(roomID string, userID int64) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	r, ok := h.rooms[roomID]
+	if !ok {
+		return false
+	}
+	for c := range r.clients {
+		if c.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
 // TryReserveAgentSlot은 빈 에이전트 슬롯을 원자적으로 예약한다 (동시 소환 race 방지)
 func (h *Hub) TryReserveAgentSlot(roomID string, maxAgents int) (int, bool) {
 	h.mu.Lock()

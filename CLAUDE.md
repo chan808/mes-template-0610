@@ -4,7 +4,7 @@
 
 ## Stack
 
-* **Backend API**: Kotlin / Spring Boot 4 / Spring Modulith / Spring Data JPA / QueryDSL / PostgreSQL / Redis
+* **Backend API**: Kotlin / Spring Boot 4 / Spring Modulith / Spring Data JPA / PostgreSQL / Redis
 * **Realtime**: Go 1.26 / coder/websocket / Redis Pub/Sub
 * **Frontend**: Next.js 16 / React 19 / TypeScript / TanStack Query / Zustand / Tailwind CSS
 * **Infra / DevOps**: Docker Compose / GitHub Actions / Nginx / Prometheus + Grafana → EKS (추후)
@@ -40,9 +40,10 @@ cd realtime && go run .
 # AI Agent
 cd agolive-agent && uvicorn main:app --reload --port 8082
 
-# Frontend
-cd frontend && npm run dev    # http://localhost:3000
-cd frontend && npm run lint
+# Frontend (패키지 매니저: pnpm — package.json packageManager 필드 기준)
+cd frontend && pnpm dev    # http://localhost:3000
+cd frontend && pnpm lint
+cd frontend && pnpm exec tsc --noEmit    # 타입 체크
 ```
 
 ## Principles

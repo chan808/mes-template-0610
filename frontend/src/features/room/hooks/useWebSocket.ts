@@ -17,6 +17,8 @@ export function useWebSocket(roomId: number, myUserId: number) {
   const wsRef = useRef<WebSocket | null>(null);
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 재연결 타이머에서 최신 connect를 참조하기 위한 ref (useCallback 자기참조 제거)
+  const connectRef = useRef<() => void>(() => {});
   const retryCountRef = useRef(0);
   const unmountedRef = useRef(false);
 
@@ -251,9 +253,14 @@ export function useWebSocket(roomId: number, myUserId: number) {
       if (retryCountRef.current === 1) {
         toast.warning("연결이 끊겼습니다. 재연결 중...");
       }
-      reconnectTimerRef.current = setTimeout(connect, delay);
+      reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
     };
   }, [roomId, handleMessage, startPing, stopPing, setStatus, setWs, clearPresence]);
+
+  // connect가 갱신될 때마다 재연결 경로도 최신 버전을 보도록 동기화
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     unmountedRef.current = true;

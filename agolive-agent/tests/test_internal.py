@@ -1,4 +1,6 @@
+import asyncio
 import os
+from types import SimpleNamespace
 
 # settings 로드 전에 테스트용 환경변수 주입
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
@@ -9,7 +11,13 @@ from fastapi.testclient import TestClient
 
 from main import app
 from routers import internal
-from routers.internal import MAX_HISTORY, truncate_history
+from routers.internal import (
+    MAX_HISTORY,
+    ROLE_CONFIGS,
+    AgentSession,
+    _build_stream_kwargs,
+    truncate_history,
+)
 
 
 def _text(role: str, i: int) -> dict:
@@ -21,6 +29,100 @@ def _tool_use_pair(i: int) -> list[dict]:
         {"role": "assistant", "content": [{"type": "tool_use", "id": f"tu_{i}", "name": "t", "input": {}}]},
         {"role": "user", "content": [{"type": "tool_result", "tool_use_id": f"tu_{i}", "content": "ok"}]},
     ]
+
+
+def _make_session(role: str = "helper", tools: list | None = None) -> AgentSession:
+    config = ROLE_CONFIGS[role]
+    return AgentSession(
+        agent_id="test-agent",
+        room_id="1",
+        role=role,
+        x=22.0,
+        y=5.0,
+        nickname=config["nickname"],
+        system_prompt=config["system"],
+        tools=config["tools"] if tools is None else tools,
+    )
+
+
+class TestBuildStreamKwargs:
+    def test_도구있는세션_병렬tooluse_비활성화(self):
+        # Go가 tool_result를 블록별로 따로 주입하므로 턴당 tool_use는 1개여야 한다
+        session = _make_session(role="orchestrator")
+
+        kwargs = _build_stream_kwargs(session)
+
+        assert kwargs["tools"] == session.tools
+        assert kwargs["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
+
+    def test_도구없는세션_tools와_toolchoice_미설정(self):
+        # tools 없이 tool_choice를 보내면 Claude API가 400을 반환한다
+        session = _make_session(tools=[])
+
+        kwargs = _build_stream_kwargs(session)
+
+        assert "tools" not in kwargs
+        assert "tool_choice" not in kwargs
+
+    def test_히스토리와_시스템프롬프트_포함(self):
+        session = _make_session()
+        session.history.append({"role": "user", "content": "안녕"})
+
+        kwargs = _build_stream_kwargs(session)
+
+        assert kwargs["messages"] is session.history
+        assert kwargs["system"] == session.system_prompt
+
+
+class TestStreamSerialization:
+    @pytest.mark.asyncio
+    async def test_동시메시지_스트림_직렬실행(self, monkeypatch):
+        # 같은 세션에 동시 스트림이 겹치면 history가 오염되므로 직렬 실행돼야 한다
+        tracker = {"active": 0, "max_active": 0}
+
+        class _FakeStream:
+            async def __aenter__(self):
+                tracker["active"] += 1
+                tracker["max_active"] = max(tracker["max_active"], tracker["active"])
+                await asyncio.sleep(0.02)  # 스트리밍 구간에서 제어 양보 → 동시성 노출
+                return self
+
+            async def __aexit__(self, *args):
+                tracker["active"] -= 1
+                return False
+
+            def __aiter__(self):
+                self._sent = False
+                return self
+
+            async def __anext__(self):
+                if self._sent:
+                    raise StopAsyncIteration
+                self._sent = True
+                return SimpleNamespace(
+                    type="content_block_delta", delta=SimpleNamespace(text="응답")
+                )
+
+            async def get_final_message(self):
+                return SimpleNamespace(content=[], stop_reason="end_turn")
+
+        class _FakeAnthropic:
+            def __init__(self, api_key):
+                self.messages = SimpleNamespace(stream=lambda **kwargs: _FakeStream())
+
+        monkeypatch.setattr(internal.anthropic, "AsyncAnthropic", _FakeAnthropic)
+        session = _make_session(tools=[])
+
+        async def consume(content: str):
+            async for _ in internal._stream_response(session, content):
+                pass
+
+        await asyncio.gather(consume("유저 1: 안녕"), consume("유저 1: 빨리"))
+
+        assert tracker["max_active"] == 1
+        assert [m["role"] for m in session.history] == [
+            "user", "assistant", "user", "assistant",
+        ]
 
 
 class TestTruncateHistory:

@@ -18,13 +18,11 @@ export default function MainLayout({
   const router = useRouter();
   const locale = useLocale();
   const { setAccessToken, clearAuth } = useAuthStore();
-  const [ready, setReady] = useState(false);
+  // 토큰 보유 시 lazy 초기값으로 처리 — 효과 내 동기 setState 제거 (react-hooks/set-state-in-effect)
+  const [ready, setReady] = useState(() => !!useAuthStore.getState().accessToken);
 
   useEffect(() => {
-    if (useAuthStore.getState().accessToken) {
-      setReady(true);
-      return;
-    }
+    if (useAuthStore.getState().accessToken) return;
 
     authApi
       .reissue()

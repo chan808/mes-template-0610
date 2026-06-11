@@ -30,6 +30,19 @@ var agentPositions = [][2]float64{
 	{22, 5}, {17, 5}, {22, 12}, {17, 12},
 }
 
+// 정원 검사와 멤버 등록을 원자적으로 수행 (check-then-act race로 인한 정원 초과 방지)
+// 이미 멤버인 유저(다중 탭)는 정원과 무관하게 허용한다
+var joinRoomScript = redis.NewScript(`
+if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+  return 1
+end
+if redis.call('SCARD', KEYS[1]) < tonumber(ARGV[2]) then
+  redis.call('SADD', KEYS[1], ARGV[1])
+  return 1
+end
+return 0
+`)
+
 type Handler struct {
 	hub    *hub.Hub
 	rdb    *redis.Client
@@ -98,9 +111,15 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 정원 초과 확인
-	memberCount, _ := h.rdb.SCard(r.Context(), "room:members:"+roomID).Result()
-	if int(memberCount) >= room.MaxCapacity {
+	// 정원 검사 + 멤버 선점 (원자적 — 동시 입장으로 인한 정원 초과 방지)
+	joined, err := joinRoomScript.Run(r.Context(), h.rdb,
+		[]string{"room:members:" + roomID}, user.UserID, room.MaxCapacity).Int()
+	if err != nil {
+		slog.Error("멤버 등록 실패", "err", err, "roomId", roomID)
+		writeJSONError(w, "INTERNAL_ERROR", "입장 처리에 실패했습니다.", http.StatusInternalServerError)
+		return
+	}
+	if joined == 0 {
 		writeJSONError(w, "ROOM_FULL", "정원이 초과되었습니다.", http.StatusConflict)
 		return
 	}
@@ -110,6 +129,8 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		OriginPatterns: []string{h.cfg.AllowedOrigin},
 	})
 	if err != nil {
+		// 선점한 멤버 슬롯 반환 (다른 탭 연결이 없을 때만)
+		h.releaseMember(roomID, user.UserID)
 		return
 	}
 
@@ -156,8 +177,16 @@ func writePump(ctx context.Context, conn *websocket.Conn, c *hub.Client) {
 	}
 }
 
+// releaseMember는 같은 유저의 다른 연결이 없을 때만 멤버 선점을 해제한다
+func (h *Handler) releaseMember(roomID string, userID int64) {
+	if h.hub.HasUserConnection(roomID, userID) {
+		return
+	}
+	h.rdb.SRem(context.Background(), "room:members:"+roomID, userID)
+}
+
 func (h *Handler) enter(ctx context.Context, c *hub.Client) {
-	h.rdb.SAdd(ctx, "room:members:"+c.RoomID, c.UserID)
+	// 멤버 등록은 ServeWS의 joinRoomScript에서 원자적으로 선점 완료
 	h.hub.Join(c)
 
 	// 입장 이벤트 브로드캐스트
@@ -234,8 +263,11 @@ func (h *Handler) leave(c *hub.Client) {
 		go h.cleanupAgentSession(a.AgentID)
 	}
 
-	h.rdb.SRem(ctx, "room:members:"+c.RoomID, c.UserID)
-	h.rdb.Del(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID))
+	// 같은 유저의 다른 연결(다중 탭)이 남아 있으면 멤버십과 presence를 유지
+	if !h.hub.HasUserConnection(c.RoomID, c.UserID) {
+		h.rdb.SRem(ctx, "room:members:"+c.RoomID, c.UserID)
+		h.rdb.Del(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID))
+	}
 	slog.Info("유저 퇴장", "userId", c.UserID, "roomId", c.RoomID)
 }
 
@@ -899,6 +931,15 @@ func (h *Handler) streamWorkerAndCollect(worker *hub.AgentState, roomID, task st
 						Filename: ev.Filename, URL: ev.URL, MimeType: ev.MimeType,
 					}))
 				default:
+					// 워커 오류도 침묵하지 않고 노출한다 (consumeAgentSSE와 동일 정책)
+					if ev.Error != "" {
+						slog.Error("워커 응답 오류", "err", ev.Error, "agentId", worker.AgentID)
+						h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
+							Type: "agent_message", AgentID: worker.AgentID,
+							Content: "(응답 생성 중 오류가 발생했습니다)", Done: true,
+						}))
+						return fullText.String()
+					}
 					fullText.WriteString(ev.Content)
 					h.hub.Publish(ctx, roomID, mustMarshal(model.AgentMessageEvent{
 						Type: "agent_message", AgentID: worker.AgentID,
@@ -982,8 +1023,8 @@ func (h *Handler) sendToolResult(ctx context.Context, agentID, toolUseID, result
 }
 
 func (h *Handler) handlePing(ctx context.Context, c *hub.Client) {
-	// presence TTL 갱신
-	h.rdb.Expire(ctx, fmt.Sprintf("presence:%s:%d", c.RoomID, c.UserID), 30*time.Second)
+	// 서버 권위 위치로 presence를 재기록 — TTL 갱신 + 만료된 키 복구
+	h.savePresence(ctx, c)
 	sendToClient(c, mustMarshal(model.PongEvent{Type: "pong"}))
 }
 
