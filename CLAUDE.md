@@ -6,7 +6,7 @@
 
 * **Backend API**: Kotlin / Spring Boot 4 / Spring Modulith / Spring Data JPA / PostgreSQL / Redis
 * **Realtime**: Go 1.26 / coder/websocket / Redis Pub/Sub
-* **Frontend**: Next.js 16 / React 19 / TypeScript / TanStack Query / Zustand / Tailwind CSS
+* **Frontend**: Next.js 16 / React 19 / TypeScript / TanStack Query / Zustand / Tailwind CSS / PixiJS (공간 렌더링)
 * **Infra / DevOps**: Docker Compose / GitHub Actions / Nginx / Prometheus + Grafana → EKS (추후)
 * **AI Agent**: Python 3.12 / FastAPI / Anthropic SDK (Claude Haiku) / aioboto3
 
@@ -44,6 +44,7 @@ cd agolive-agent && uvicorn main:app --reload --port 8082
 cd frontend && pnpm dev    # http://localhost:3000
 cd frontend && pnpm lint
 cd frontend && pnpm exec tsc --noEmit    # 타입 체크
+cd frontend && pnpm test    # 단위 테스트 (vitest)
 ```
 
 ## Principles
@@ -79,6 +80,11 @@ cd frontend && pnpm exec tsc --noEmit    # 타입 체크
 * `testing` 표준 패키지 + testify/assert 사용
 * JWT 파싱, 이벤트 핸들러 로직 단위 테스트
 * 테스트 함수명: `Test_상황_기대결과` 형식
+
+**Frontend (TypeScript)**
+* vitest 사용. 렌더링이 아닌 순수 로직(충돌맵, 이동 큐, 카메라 등 `lib/`)만 단위 테스트
+* 테스트 파일 위치: `src/**/__tests__/*.test.ts`
+* 테스트명: `it("상황_행동_기대결과")` 형식
 
 ## Git
 

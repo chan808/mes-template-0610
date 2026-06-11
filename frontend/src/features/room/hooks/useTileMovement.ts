@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePresenceStore } from "../stores/presenceStore";
-import { DEFAULT_MAP } from "../lib/maps";
-import { DIR_DELTA, Direction, MOVE_MS, isWalkable } from "../lib/tile";
+import { DIR_DELTA, Direction, MOVE_MS, TileMap, isWalkable } from "../lib/tile";
 import { ClientMessage } from "../types/ws";
 
 // 물리 키 코드 → 방향 매핑 (WASD + 방향키)
@@ -21,7 +20,8 @@ const CODE_TO_DIR: Record<string, Direction> = {
 
 // 칸 단위 이동: 이동 중에는 입력을 받지 않고, 한 칸 이동이 끝나면
 // 눌려 있는 키(마지막 입력 우선)를 재평가해 연속 이동한다 (Zep 방식)
-export function useTileMovement(send: (msg: ClientMessage) => void) {
+// map: 가구 충돌이 반영된 방의 충돌맵
+export function useTileMovement(send: (msg: ClientMessage) => void, map: TileMap) {
   const pressedRef = useRef<string[]>([]); // 누른 순서 유지 — 마지막 키가 우선
   const movingUntilRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -34,7 +34,7 @@ export function useTileMovement(send: (msg: ClientMessage) => void) {
       const ny = myTile.y + delta.y;
 
       // 막힌 방향이면 바라보는 방향만 변경 (이동·전송 없음)
-      if (!isWalkable(DEFAULT_MAP, nx, ny)) {
+      if (!isWalkable(map, nx, ny)) {
         if (myDir !== dir) setMyTile(myTile.x, myTile.y, dir);
         return;
       }
@@ -88,5 +88,5 @@ export function useTileMovement(send: (msg: ClientMessage) => void) {
       window.removeEventListener("blur", onBlur);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [send]);
+  }, [send, map]);
 }

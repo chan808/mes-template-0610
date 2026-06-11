@@ -28,8 +28,8 @@ function RoomSpaceInner({ roomId, myUserId, myNickname }: { roomId: number; myUs
 
         {/* 본문 레이아웃: 캔버스 + 사이드바 */}
         <div className="flex flex-1 overflow-hidden">
-          {/* 캔버스 영역 (스크롤 가능) */}
-          <div className="flex-1 overflow-auto p-4">
+          {/* 캔버스 영역: 뷰포트를 채우고 카메라가 내 아바타를 추적 */}
+          <div className="flex-1 overflow-hidden p-4">
             <SpaceCanvas myUserId={myUserId} myNickname={myNickname} onSend={send} />
           </div>
 
