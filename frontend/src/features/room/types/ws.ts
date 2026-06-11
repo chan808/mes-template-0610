@@ -1,7 +1,10 @@
-// 클라이언트 → 서버 메시지
+import { Direction } from "../lib/tile";
+
+// 클라이언트 → 서버 메시지 (x, y는 타일 좌표)
 export type ClientMessage =
-  | { type: "move"; x: number; y: number }
+  | { type: "move"; x: number; y: number; dir: Direction }
   | { type: "chat"; content: string }
+  | { type: "whisper"; targetUserId: number; content: string }
   | { type: "ping" }
   | { type: "summon_agent"; role: AgentRole }
   | { type: "dismiss_agent"; agentId: string }
@@ -9,10 +12,11 @@ export type ClientMessage =
 
 export type AgentRole = "helper" | "summarizer" | "researcher" | "critic" | "orchestrator";
 
-// 서버 → 클라이언트 메시지
+// 서버 → 클라이언트 메시지 (x, y는 타일 좌표)
 export type ServerMessage =
-  | { type: "presence"; userId: number; x: number; y: number; nickname: string; avatarId: number | null }
+  | { type: "presence"; userId: number; x: number; y: number; dir: Direction; nickname: string; avatarId: number | null }
   | { type: "chat"; messageId: number; userId: number; content: string; createdAt: string }
+  | { type: "whisper"; fromUserId: number; toUserId: number; nickname: string; content: string; createdAt: string }
   | { type: "join"; userId: number; nickname: string }
   | { type: "leave"; userId: number }
   | { type: "pong" }
@@ -28,8 +32,9 @@ export type WsStatus = "disconnected" | "connecting" | "connected" | "error";
 
 export interface PresenceEntry {
   userId: number;
-  x: number;
-  y: number;
+  x: number; // 타일 좌표
+  y: number; // 타일 좌표
+  dir: Direction;
   nickname: string;
   avatarId: number | null;
 }
@@ -45,6 +50,8 @@ export interface AgentEntry {
 // 채팅 패널에서 사용하는 통합 메시지 타입
 export type DisplayMessage =
   | { id: string; type: "chat"; userId: number; nickname: string; content: string; createdAt: string }
+  // nickname은 발신자, toNickname은 수신자 표시용 (수신 시점에 캐시에서 확정)
+  | { id: string; type: "whisper"; fromUserId: number; toUserId: number; nickname: string; toNickname: string; content: string; createdAt: string }
   | { id: string; type: "system"; content: string; createdAt: string }
   | { id: string; type: "agent"; agentId: string; nickname: string; content: string; createdAt: string; streaming: boolean }
   | { id: string; type: "file"; agentId: string; nickname: string; filename: string; url: string; mimeType: string; createdAt: string };

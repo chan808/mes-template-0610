@@ -41,4 +41,5 @@ infra/terraform/.terraform.lock.hcl
 # --- ai ---
 #CLAUDE.md
 #AGENTS.md
+#docs/
 .claude/

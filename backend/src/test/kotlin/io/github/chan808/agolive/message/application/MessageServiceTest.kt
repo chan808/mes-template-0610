@@ -132,4 +132,32 @@ class MessageServiceTest {
         assertEquals(1L, result.id)
         assertEquals("메시지 1", result.content)
     }
+
+    @Test
+    fun `에이전트_메시지_저장시_타입과_닉네임_보존`() {
+        val saved = Message(
+            roomId = 1L,
+            userId = null,
+            content = "요약 결과입니다.",
+            type = MessageType.agent,
+            agentNickname = "AI 요약자",
+        ).apply {
+            val field = Message::class.java.getDeclaredField("id")
+            field.isAccessible = true
+            field.set(this, 2L)
+        }
+        every { messageRepository.save(any()) } returns saved
+
+        val result = messageService.save(
+            roomId = 1L,
+            userId = null,
+            content = "요약 결과입니다.",
+            type = MessageType.agent,
+            agentNickname = "AI 요약자",
+        )
+
+        assertEquals(MessageType.agent, result.type)
+        assertEquals("AI 요약자", result.agentNickname)
+        assertNull(result.userId)
+    }
 }

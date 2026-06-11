@@ -24,6 +24,9 @@ _sessions: dict[str, "AgentSession"] = {}
 _lock = asyncio.Lock()
 
 MAX_AGENTS_PER_ROOM = 4
+MAX_HISTORY = 40
+# Go의 HitL 대기(120s)보다 길어야 사용자 응답이 유실되지 않는다
+TOOL_RESULT_TIMEOUT_SECONDS = 180.0
 
 # request_human_input 툴: 모든 역할에서 사용 가능 (Phase 3-B)
 REQUEST_HUMAN_INPUT_TOOL = {
@@ -146,6 +149,8 @@ class AgentSession:
     # tool_use 완료 대기 (Phase 3-B/C)
     _tool_event: asyncio.Event = field(default_factory=asyncio.Event)
     _tool_results: list[dict] = field(default_factory=list)
+    # 세션당 스트림 직렬화 — 연속 채팅 시 history/_tool_event 동시 변형 방지
+    _stream_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def verify_internal(x_internal_secret: str = Header(...)):
@@ -153,18 +158,30 @@ def verify_internal(x_internal_secret: str = Header(...)):
         raise HTTPException(status_code=401)
 
 
+def truncate_history(history: list[dict], max_len: int = MAX_HISTORY) -> list[dict]:
+    """히스토리를 최대 길이로 절단하되 tool_use/tool_result 쌍이 깨지지 않게 유지한다.
+
+    단순 슬라이스는 tool_result(user 메시지의 list content)가 선행 tool_use 없이
+    맨 앞에 남아 Claude API 400을 유발할 수 있다. 절단 후 첫 메시지가
+    일반 텍스트 user 메시지가 될 때까지 앞에서 추가로 제거한다.
+    """
+    if len(history) <= max_len:
+        return history
+    trimmed = history[-max_len:]
+    while trimmed and not (
+        trimmed[0]["role"] == "user" and isinstance(trimmed[0]["content"], str)
+    ):
+        trimmed.pop(0)
+    return trimmed
+
+
 @router.post("/agent/sessions")
 async def summon_agent(body: dict, _=Depends(verify_internal)):
     room_id = str(body["roomId"])
     role = body.get("role", "helper")
-    x = float(body.get("x", 900.0))
-    y = float(body.get("y", 200.0))
-
-    # 방 당 최대 에이전트 수 확인
-    async with _lock:
-        room_agent_count = sum(1 for s in _sessions.values() if s.room_id == room_id)
-        if room_agent_count >= MAX_AGENTS_PER_ROOM:
-            raise HTTPException(status_code=409, detail="AGENT_LIMIT_EXCEEDED")
+    # 타일 좌표 (realtime이 항상 전달 — 미전달 시 기본 슬롯 0 위치)
+    x = float(body.get("x", 22.0))
+    y = float(body.get("y", 5.0))
 
     config = ROLE_CONFIGS.get(role, ROLE_CONFIGS["helper"])
     agent_id = str(uuid.uuid4())
@@ -192,14 +209,25 @@ async def summon_agent(body: dict, _=Depends(verify_internal)):
         tools=config.get("tools", []),
     )
 
+    # 정원 확인과 등록을 한 락 안에서 처리 (동시 소환 race 방지)
     async with _lock:
+        room_sessions = [s for s in _sessions.values() if s.room_id == room_id]
+        if len(room_sessions) >= MAX_AGENTS_PER_ROOM:
+            raise HTTPException(status_code=409, detail="AGENT_LIMIT_EXCEEDED")
+        # 동일 역할 중복 소환 시 사용 중이지 않은 가장 작은 번호 부여 (퇴장 후 재소환 시 중복 방지)
+        used_nicknames = {s.nickname for s in room_sessions if s.role == role}
+        if config["nickname"] in used_nicknames:
+            n = 2
+            while f"{config['nickname']} {n}" in used_nicknames:
+                n += 1
+            session.nickname = f"{config['nickname']} {n}"
         _sessions[agent_id] = session
 
     return {
         "agentId": agent_id,
         "x": x,
         "y": y,
-        "nickname": config["nickname"],
+        "nickname": session.nickname,
         "role": role,
     }
 
@@ -211,13 +239,9 @@ async def send_message(agent_id: str, body: dict, _=Depends(verify_internal)):
         raise HTTPException(status_code=404)
 
     user_content = f"유저 {body['userId']}: {body['content']}"
-    session.history.append({"role": "user", "content": user_content})
-    # 오래된 히스토리 제거 (항상 짝수 쌍 유지)
-    if len(session.history) > 40:
-        session.history = session.history[-40:]
 
     return StreamingResponse(
-        _stream_response(session),
+        _stream_response(session, user_content),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -247,8 +271,43 @@ async def dismiss_agent(agent_id: str, _=Depends(verify_internal)):
     return {"ok": True}
 
 
-async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
-    """tool_use 루프를 지원하는 SSE 스트리밍 응답 생성기."""
+def _build_stream_kwargs(session: AgentSession) -> dict:
+    """Claude API 스트리밍 호출 인자를 구성한다."""
+    kwargs: dict = {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "system": session.system_prompt,
+        "messages": session.history,
+    }
+    if session.tools:
+        kwargs["tools"] = session.tools
+        # Go가 tool_result를 블록 단위로 따로 주입하므로 턴당 tool_use 1개만 허용
+        # (병렬 블록 허용 시 결과 1개만 반영되어 다음 호출이 400으로 실패)
+        kwargs["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
+    return kwargs
+
+
+async def _stream_response(session: AgentSession, user_content: str) -> AsyncIterator[str]:
+    """세션 단위 락으로 직렬화된 SSE 스트리밍 응답 생성기.
+
+    같은 세션의 동시 스트림은 history와 _tool_event를 공유 변형하므로
+    락으로 직렬화한다. 연속 채팅은 순차적으로 응답된다.
+    """
+    async with session._stream_lock:
+        if session.cancelled:
+            return
+
+        # 직렬화 확정 후 기록해야 user → assistant 턴 순서가 보존된다
+        session.history.append({"role": "user", "content": user_content})
+        # 오래된 히스토리 제거 (tool_use/tool_result 쌍 보존)
+        session.history = truncate_history(session.history)
+
+        async for chunk in _run_agent_loop(session):
+            yield chunk
+
+
+async def _run_agent_loop(session: AgentSession) -> AsyncIterator[str]:
+    """tool_use 루프를 지원하는 응답 생성 코어 (스트림 락 보유 상태에서 호출)."""
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     while True:
@@ -262,14 +321,7 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
         tool_use_blocks: list = []
 
         try:
-            stream_kwargs: dict = {
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 1024,
-                "system": session.system_prompt,
-                "messages": session.history,
-            }
-            if session.tools:
-                stream_kwargs["tools"] = session.tools
+            stream_kwargs = _build_stream_kwargs(session)
 
             async with client.messages.stream(**stream_kwargs) as stream:
                 async for event in stream:
@@ -307,8 +359,8 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
                     f"data: {json.dumps({'type': 'tool_use', 'toolName': block.name, 'toolInput': block.input, 'toolUseId': block.id, 'done': False}, ensure_ascii=False)}\n\n"
                 )
 
-            # Go가 tool_result를 주입할 때까지 대기 (최대 60초, keepalive 포함)
-            deadline = asyncio.get_event_loop().time() + 60.0
+            # Go가 tool_result를 주입할 때까지 대기 (keepalive 포함)
+            deadline = asyncio.get_event_loop().time() + TOOL_RESULT_TIMEOUT_SECONDS
             while not session._tool_event.is_set():
                 if session.cancelled:
                     return
@@ -327,6 +379,14 @@ async def _stream_response(session: AgentSession) -> AsyncIterator[str]:
 
             if session.cancelled:
                 return
+
+            # 방어: 응답이 누락된 tool_use 블록을 채워 히스토리 무결성 보장 (API 400 방지)
+            received = {r.get("tool_use_id") for r in session._tool_results}
+            for block in tool_use_blocks:
+                if block.id not in received:
+                    session._tool_results.append(
+                        {"type": "tool_result", "tool_use_id": block.id, "content": "(결과 누락)"}
+                    )
 
             # tool_result를 히스토리에 추가하고 루프 재진행
             session.history.append({"role": "user", "content": session._tool_results})
